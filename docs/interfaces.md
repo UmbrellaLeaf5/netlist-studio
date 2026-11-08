@@ -21,11 +21,12 @@
 Пока не выбрано между PySide6 и PyQt6, сигналы в документе записаны как `Signal(...)`
 (в PyQt6 это `pyqtSignal`). Тесты: `pytest` для логики, `pytest-qt` для интерфейса.
 
-**Структура пакетов.** Разбиение на файлы повторяет архитектуру, новых модулей не добавляется:
+**Структура пакетов.** Разбиение на файлы соответствует архитектуре и ответственности модулей:
 
 ```
 netlist/
-  core/      model.py  parser.py  serializer.py  hierarchy.py                 # ядро редактора
+  core/      model.py  diagnostics.py  errors.py  views.py  entities.py
+             netlist.py  parser.py  serializer.py  hierarchy.py                 # ядро редактора
   editor/    main_window.py  canvas.py  block_list.py  tool_palette.py
              file_manager.py  undo_stack.py  autosave.py
   checker/   cli.py  checker_parser.py  model_utils.py  syntax_check.py
@@ -38,7 +39,12 @@ netlist/
 
 **Зависимости по коду (только стрелки финальной архитектуры):**
 
-- `core.model` ни от чего в проекте не зависит.
+- `core.diagnostics` и `core.errors` не зависят от модулей проекта.
+- `core.views` → `core.diagnostics`.
+- `core.entities` → `core.diagnostics`, `core.errors`, `core.views`.
+- `core.netlist` → `core.entities`, `core.errors`, `core.views`.
+- `core.model` — публичный фасад, который экспортирует типы и классы из
+  `diagnostics`, `errors`, `views`, `entities` и `netlist`.
 - `core.parser` → `core.model`, `checker.syntax_check`.
 - `core.serializer` → `core.model`.
 - `core.hierarchy` → `core.model`, `checker.hierarchy_check`, `checker.cycle_check`.
@@ -240,12 +246,20 @@ end
 М. Шифрин, Н. Чиркин, Л. Сальникова, М. Большаков (они пользуются `NetlistView`, `Diagnostic`,
 `CheckOptions`).
 
-Модуль хранит **принятое** состояние нетлиста и объявляет общие типы проекта. Интерфейс,
-парсер и сериализатор в нём не используются.
+Публичный фасад хранит API **принятой** модели нетлиста и общих типов проекта. Реализация
+разделена по ответственности: `diagnostics.py` содержит общие типы сообщений и настроек,
+`views.py` — протоколы чтения, `entities.py` — блоки, экземпляры, пины, цепи и примитивы,
+`errors.py` — `ModelError`, а `netlist.py` — контейнер определений и принятие черновиков.
+Старые импорты из `netlist.core.model` сохраняются. Интерфейс, парсер и сериализатор в модели
+не используются.
 
 #### Общие типы
 
 ```python
+class InstanceKind(str, enum.Enum):
+    SUB = "sub"
+    PRIM = "prim"
+
 class Severity(enum.Enum):
     ERROR = "error"
     WARNING = "warning"
@@ -324,7 +338,7 @@ class NetView(Protocol):
 
 class InstanceView(Protocol):
     name: str
-    kind: Literal["sub", "prim"]
+    kind: InstanceKind
     type_name: str         # имя блока или примитива
     loc: SourceLoc
     def pins(self) -> list[PinView]        # пины, упомянутые в строках INST.PIN
@@ -407,7 +421,7 @@ class Block:
     def add_net(self, name: str) -> Net
     def remove_net(self, name: str) -> None        # отключает все пины этой цепи
     def rename_net(self, old: str, new: str) -> None   # обновляет ссылки во всех пинах
-    def add_instance(self, name: str, kind: str, type_name: str) -> Instance
+    def add_instance(self, name: str, kind: InstanceKind | str, type_name: str) -> Instance
     def remove_instance(self, name: str) -> None
     def rename_instance(self, old: str, new: str) -> None
     def instance(self, name: str) -> Instance
@@ -415,8 +429,8 @@ class Block:
 
 ```python
 class Instance:
-    name: str; kind: str; type_name: str; loc: SourceLoc
-    def set_type(self, kind: str, type_name: str) -> None
+    name: str; kind: InstanceKind; type_name: str; loc: SourceLoc
+    def set_type(self, kind: InstanceKind | str, type_name: str) -> None
     def add_pin(self, name: str, net: str | None = None) -> Pin
     def remove_pin(self, name: str) -> None
     def rename_pin(self, old: str, new: str) -> None
