@@ -23,6 +23,12 @@ uv run main.py
 
 Add a dependency with `uv add <package>`; remove one with `uv remove <package>`. Both commands update `pyproject.toml` and `uv.lock`.
 
+## Documentation
+
+- [Technical requirements (Markdown)](docs/technical-requirements.md)
+- [Original technical requirements (PDF)](docs/technical-requirements.pdf)
+- [Module interfaces and architecture](docs/interfaces.md)
+
 ## Установка (русский)
 
 Установите [uv](https://docs.astral.sh/uv/getting-started/installation/), клонируйте репозиторий и перейдите в его директорию:

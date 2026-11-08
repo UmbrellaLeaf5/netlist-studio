@@ -1566,7 +1566,7 @@ design.net:41: warning W604 [net] цепь 'n9' блока 'block1' подклю
    `checker_parser.load` → `NetlistParser.parse` → проверки по `CHECKS` → `report` → код выхода →
    `checkerFinished(code)` → `CheckerDialog.show_exit_code`.
 
-Каждая стрелка этого сценария соответствует ребру на `overall_structure.png`.
+Каждая стрелка этого сценария соответствует ребру на [`images/overall-structure.png`](images/overall-structure.png).
 
 ---
 
