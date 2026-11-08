@@ -1,223 +1,94 @@
-# Template
+# Netlist Studio
 
-## Installation (eng)
+Netlist Studio — проект для работы с иерархическими нетлистами электрических и логических схем. Нетлист описывает блоки, экземпляры подсхем и примитивов, их пины и соединяющие их цепи независимо от графического изображения схемы.
 
-0.  **Clone the repository:**
+По [техническому заданию](docs/technical-requirements.md) проект должен включать три компонента:
 
-    Before you begin, you need to clone the project's source code repository.
+- **Оболочку** с графическим интерфейсом для запуска остальных компонентов.
+- **Редактор** для создания схем, сохранения нетлиста, графического представления и истории изменений.
+- **Чекер** — консольную программу для поиска ошибок в нетлисте.
 
-    ```bash
-    git clone https://github.com/UmbrellaLeaf5/template_python_usual.git
-    ```
+Целевые платформы — Windows и Linux. Формат нетлиста и интерфейсы компонентов описаны в [документе по архитектуре](docs/interfaces.md).
 
-    Go to the directory where the repository was cloned:
+## Текущее состояние
 
-    ```bash
-    cd template_python_usual
-    ```
+Проект находится в разработке. Сейчас в репозитории есть:
 
-1.  **Creating a virtual environment:**
+| Компонент | Реализация |
+| --- | --- |
+| Ядро модели | Классы нетлиста, блоков, экземпляров, пинов, цепей и примитивов; операции изменения, копирования и атомарного принятия состояния. |
+| Общие типы | Протоколы чтения нетлиста, диагностики проверок, параметры проверок и виды инстансов. |
+| Проверки чекера | Модули проверки пинов и соответствия экземпляров определениям их типов. |
 
-    Open a terminal or command prompt in the root directory of your project (where the `requirements.txt` file is located) and run the following command to create a virtual environment named `.venv`:
+Модули оболочки, графического редактора, парсера, сериализатора и полноценного CLI чекера ещё не реализованы. `main.py` пока является заготовкой: его запуск не открывает интерфейс и не проверяет нетлисты. Для проверки модели можно использовать пример ниже.
 
-    ```bash
-    python3 -m venv .venv
-    ```
+## Установка
 
-    or
+Установите Python и [uv](https://docs.astral.sh/uv/getting-started/installation/). Для разработки ориентируйтесь на Python 3.11 или новее, как указано в архитектурном документе.
 
-    ```bash
-    python -m venv .venv
-    ```
-
-    - If you only have `Python 3` installed, you can use `python` instead of `python3`.
-    - If the virtual environment already exists (you created it earlier), skip this step.
-
-2.  **Activating the virtual environment:**
-
-    Activate the virtual environment so that `Python` uses the libraries installed inside it:
-
-    - **Linux/macOS:**
-
-      ```bash
-      source .venv/bin/activate
-      ```
-
-    - **Windows (Command Prompt):**
-
-      ```cmd
-      .venv\Scripts\activate
-      ```
-
-    - **Windows (PowerShell):**
-
-      ```powershell
-      .venv\Scripts\Activate.ps1
-      ```
-
-    Once activated, you will see `(.venv)` at the beginning of the terminal line, indicating that the virtual environment is active.
-
-3.  **Installing dependencies from `requirements.txt`:**
-
-    Install all libraries listed in the `requirements.txt` file by running the following command:
-
-    ```bash
-    ./.venv/Scripts/pip install -r requirements.txt
-    ```
-
-    or simply:
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-**Or just use [`uv`](https://github.com/astral-sh/uv):**
+В корневой папке клонированного репозитория выполните:
 
 ```bash
-uv venv .venv
+uv sync --locked
 ```
 
-- **Linux/macOS:**
+`uv` создаст виртуальное окружение `.venv` и установит зависимости из `uv.lock`. Активировать окружение вручную не требуется: команды с префиксом `uv run` используют его автоматически.
 
-  ```bash
-  source .venv/bin/activate
-  ```
+## Пример работы с моделью
 
-- **Windows (Git Bash):**
-
-  ```bash
-  source .venv/Scripts/activate
-  ```
-
-- **Windows (Command Prompt):**
-
-  ```cmd
-  .venv\Scripts\activate
-  ```
-
-- **Windows (PowerShell):**
-
-  ```powershell
-  .venv\Scripts\Activate.ps1
-  ```
+Запустите интерпретатор в корне проекта:
 
 ```bash
-uv pip install -r requirements.txt
+uv run python
 ```
 
-P.S. one string:
+В интерактивном сеансе можно создать блок с цепью и подключённым экземпляром примитива:
 
-```bash
-uv venv .venv && source .venv/Scripts/activate && uv pip install -r requirements.txt
+```python
+from netlist.core.model import InstanceKind, Netlist
+
+model = Netlist()
+model.add_primitive("diode", ["anode", "cathode"])
+
+main = model.add_block("main")
+main.add_net("signal")
+main.add_pin("input", "signal")
+
+diode = main.add_instance("d1", InstanceKind.PRIM, "diode")
+diode.add_pin("anode", "signal")
+diode.add_pin("cathode")  # None — пин пока не подключён
+
+print(model.block("main").instance("d1").pins()[0].net)
+# signal
 ```
 
-## Installation (rus)
+Классы ядра проверяют структурные ограничения, например уникальность имён и существование цепи перед подключением пина. Проверки содержимого иерархии относятся к чекеру и не выполняются при создании модели.
 
-0.  **Клонирование репозитория:**
+## Структура репозитория
 
-    Перед тем как начать, вам необходимо клонировать репозиторий с исходным кодом проекта.
-
-    ```bash
-    git clone https://github.com/UmbrellaLeaf5/template_python_usual.git
-    ```
-
-    Перейдите в директорию, куда был клонирован репозиторий:
-
-    ```bash
-    cd template_python_usual
-    ```
-
-1.  **Создание виртуального окружения:**
-
-    Откройте терминал или командную строку в корневой директории вашего проекта (там, где находится файл `requirements.txt`) и выполните следующую команду для создания виртуального окружения с именем `.venv`:
-
-    ```bash
-    python3 -m venv .venv
-    ```
-
-    или
-
-    ```bash
-    python -m venv .venv
-    ```
-
-    - Если у вас установлена только версия `Python 3`, можете использовать `python` вместо `python3`.
-    - Если виртуальное окружение уже существует (вы его создавали ранее), пропустите этот шаг.
-
-2.  **Активация виртуального окружения:**
-
-    Активируйте виртуальное окружение, чтобы `Python` использовал библиотеки, установленные внутри него:
-
-    - **Linux/macOS:**
-
-      ```bash
-      source .venv/bin/activate
-      ```
-
-    - **Windows (Command Prompt):**
-
-      ```cmd
-      .venv\Scripts\activate
-      ```
-
-    - **Windows (PowerShell):**
-
-      ```powershell
-      .venv\Scripts\Activate.ps1
-      ```
-
-    После активации вы увидите `(.venv)` в начале строки терминала, указывающее на то, что виртуальное окружение активно.
-
-3.  **Установка зависимостей из `requirements.txt`:**
-
-    Установите все библиотеки, перечисленные в файле `requirements.txt`, выполнив следующую команду:
-
-    ```bash
-    ./.venv/Scripts/pip install -r requirements.txt
-    ```
-
-    или просто:
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-**Или просто используйте [`uv`](https://github.com/astral-sh/uv):**
-
-```bash
-uv venv .venv
+```text
+netlist/
+  core/
+    model.py         # публичная точка импорта классов ядра
+    netlist.py       # определения верхнего уровня и принятие состояния
+    entities.py      # блоки, экземпляры, пины, цепи и примитивы
+    views.py         # протоколы чтения для модели и черновиков
+    diagnostics.py   # диагностики, параметры проверок, виды инстансов
+    errors.py        # ошибки структурных операций модели
+  checker/
+    pin_check.py
+    subcircuit_check.py
+docs/
+  technical-requirements.md
+  technical-requirements.pdf
+  interfaces.md
+  images/
 ```
 
-- **Linux/macOS:**
+Новые зависимости добавляются командой `uv add <пакет>`, удаляются через `uv remove <пакет>`: эти команды обновляют `pyproject.toml` и `uv.lock`.
 
-  ```bash
-  source .venv/bin/activate
-  ```
+## Документация
 
-- **Windows (Git Bash):**
-
-  ```bash
-  source .venv/Scripts/activate
-  ```
-
-- **Windows (Command Prompt):**
-
-  ```cmd
-  .venv\Scripts\activate
-  ```
-
-- **Windows (PowerShell):**
-
-  ```powershell
-  .venv\Scripts\Activate.ps1
-  ```
-
-```bash
-uv pip install -r requirements.txt
-```
-
-P.S. одной строкой:
-
-```bash
-uv venv .venv && source .venv/Scripts/activate && uv pip install -r requirements.txt
-```
+- [Техническое задание в Markdown](docs/technical-requirements.md).
+- [Исходное техническое задание в PDF](docs/technical-requirements.pdf).
+- [Формат нетлиста, архитектура и интерфейсы модулей](docs/interfaces.md).
