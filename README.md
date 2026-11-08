@@ -1,53 +1,94 @@
 # Netlist Studio
 
-## Installation (English)
+Netlist Studio — проект для работы с иерархическими нетлистами электрических и логических схем. Нетлист описывает блоки, экземпляры подсхем и примитивов, их пины и соединяющие их цепи независимо от графического изображения схемы.
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then clone the repository and enter its directory:
+По [техническому заданию](docs/technical-requirements.md) проект должен включать три компонента:
 
-```bash
-git clone <repository-url>
-cd netlist-studio
-```
+- **Оболочку** с графическим интерфейсом для запуска остальных компонентов.
+- **Редактор** для создания схем, сохранения нетлиста, графического представления и истории изменений.
+- **Чекер** — консольную программу для поиска ошибок в нетлисте.
 
-Create the virtual environment and install the locked dependencies:
+Целевые платформы — Windows и Linux. Формат нетлиста и интерфейсы компонентов описаны в [документе по архитектуре](docs/interfaces.md).
 
-```bash
-uv sync
-```
+## Текущее состояние
 
-Run the project with:
+Проект находится в разработке. Сейчас в репозитории есть:
 
-```bash
-uv run main.py
-```
+| Компонент | Реализация |
+| --- | --- |
+| Ядро модели | Классы нетлиста, блоков, экземпляров, пинов, цепей и примитивов; операции изменения, копирования и атомарного принятия состояния. |
+| Общие типы | Протоколы чтения нетлиста, диагностики проверок, параметры проверок и виды инстансов. |
+| Проверки чекера | Модули проверки пинов и соответствия экземпляров определениям их типов. |
 
-Add a dependency with `uv add <package>`; remove one with `uv remove <package>`. Both commands update `pyproject.toml` and `uv.lock`.
+Модули оболочки, графического редактора, парсера, сериализатора и полноценного CLI чекера ещё не реализованы. `main.py` пока является заготовкой: его запуск не открывает интерфейс и не проверяет нетлисты. Для проверки модели можно использовать пример ниже.
 
-## Documentation
+## Установка
 
-- [Technical requirements (Markdown)](docs/technical-requirements.md)
-- [Original technical requirements (PDF)](docs/technical-requirements.pdf)
-- [Module interfaces and architecture](docs/interfaces.md)
+Установите Python и [uv](https://docs.astral.sh/uv/getting-started/installation/). Для разработки ориентируйтесь на Python 3.11 или новее, как указано в архитектурном документе.
 
-## Установка (русский)
-
-Установите [uv](https://docs.astral.sh/uv/getting-started/installation/), клонируйте репозиторий и перейдите в его директорию:
+В корневой папке клонированного репозитория выполните:
 
 ```bash
-git clone <ссылка-на-репозиторий>
-cd netlist-studio
+uv sync --locked
 ```
 
-Создайте виртуальное окружение и установите зависимости из lock-файла:
+`uv` создаст виртуальное окружение `.venv` и установит зависимости из `uv.lock`. Активировать окружение вручную не требуется: команды с префиксом `uv run` используют его автоматически.
+
+## Пример работы с моделью
+
+Запустите интерпретатор в корне проекта:
 
 ```bash
-uv sync
+uv run python
 ```
 
-Запустите проект:
+В интерактивном сеансе можно создать блок с цепью и подключённым экземпляром примитива:
 
-```bash
-uv run main.py
+```python
+from netlist.core.model import InstanceKind, Netlist
+
+model = Netlist()
+model.add_primitive("diode", ["anode", "cathode"])
+
+main = model.add_block("main")
+main.add_net("signal")
+main.add_pin("input", "signal")
+
+diode = main.add_instance("d1", InstanceKind.PRIM, "diode")
+diode.add_pin("anode", "signal")
+diode.add_pin("cathode")  # None — пин пока не подключён
+
+print(model.block("main").instance("d1").pins()[0].net)
+# signal
 ```
 
-Добавить зависимость можно командой `uv add <пакет>`, удалить — `uv remove <пакет>`. Обе команды обновляют `pyproject.toml` и `uv.lock`.
+Классы ядра проверяют структурные ограничения, например уникальность имён и существование цепи перед подключением пина. Проверки содержимого иерархии относятся к чекеру и не выполняются при создании модели.
+
+## Структура репозитория
+
+```text
+netlist/
+  core/
+    model.py         # публичная точка импорта классов ядра
+    netlist.py       # определения верхнего уровня и принятие состояния
+    entities.py      # блоки, экземпляры, пины, цепи и примитивы
+    views.py         # протоколы чтения для модели и черновиков
+    diagnostics.py   # диагностики, параметры проверок, виды инстансов
+    errors.py        # ошибки структурных операций модели
+  checker/
+    pin_check.py
+    subcircuit_check.py
+docs/
+  technical-requirements.md
+  technical-requirements.pdf
+  interfaces.md
+  images/
+```
+
+Новые зависимости добавляются командой `uv add <пакет>`, удаляются через `uv remove <пакет>`: эти команды обновляют `pyproject.toml` и `uv.lock`.
+
+## Документация
+
+- [Техническое задание в Markdown](docs/technical-requirements.md).
+- [Исходное техническое задание в PDF](docs/technical-requirements.pdf).
+- [Формат нетлиста, архитектура и интерфейсы модулей](docs/interfaces.md).
