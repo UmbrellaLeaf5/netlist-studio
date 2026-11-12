@@ -77,6 +77,19 @@ def index_blocks(view: NetlistView) -> dict[str, list[BlockView]]:
     return name_to_blocks
 
 
+def index_primitives(view: NetlistView) -> dict[str, list[PrimitiveView]]:
+    """Строит индекс примитивов, сохраняя определения с одинаковыми именами."""
+    name_to_primitives: dict[str, list[PrimitiveView]] = {}
+    for primitive in view.primitives():
+        name_to_primitives.setdefault(primitive.name, []).append(primitive)
+    return name_to_primitives
+
+
+def block_pin_names(block: BlockView) -> list[str]:
+    """Вернуть имена внешних пинов блока в порядке объявления."""
+    return [pin.name for pin in block.pins()]
+
+
 def index_nets(block: BlockView) -> dict[str, list[NetView]]:
     """
     Строит индекс сетей внутри одного блока.
@@ -192,7 +205,7 @@ class ModelIndex:
     (NetlistView) и должен инициализироваться через `init`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, view: NetlistView | None = None) -> None:
         """
         Создает пустой экземпляр кэша.
 
@@ -202,8 +215,11 @@ class ModelIndex:
         """
         self._view: NetlistView | None = None
         self._blocks_index: dict[str, list[BlockView]] = {}
+        self._primitives_index: dict[str, list[PrimitiveView]] = {}
         self._nets_cache: dict[int, dict[str, list[NetView]]] = {}
         self._pins_cache: dict[int, dict[str, list[tuple[PinRef, SourceLoc]]]] = {}
+        if view is not None:
+            self.init(view)
 
     def init(self, view: NetlistView) -> None:
         """
@@ -215,10 +231,21 @@ class ModelIndex:
         """
         self._view = view
         self._blocks_index = index_blocks(view)
+        self._primitives_index = index_primitives(view)
 
         # Очищаем кэши для блоков, так как они относятся к старой модели.
         self._nets_cache.clear()
         self._pins_cache.clear()
+
+    @property
+    def blocks(self) -> dict[str, list[BlockView]]:
+        """Индекс блоков, построенный последним вызовом ``init``."""
+        return self._blocks_index
+
+    @property
+    def primitives(self) -> dict[str, list[PrimitiveView]]:
+        """Индекс примитивов, построенный последним вызовом ``init``."""
+        return self._primitives_index
 
     def nets(self, block: BlockView) -> dict[str, list[NetView]]:
         """

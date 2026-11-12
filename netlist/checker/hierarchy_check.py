@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, Iterable
 # Импортируем наш модуль утилит.
 # Если запускается как отдельный файл, может потребоваться
 # настройка sys.path, но в рамках проекта это должно работать.
-import model_utils
+from netlist.checker import model_utils
+from netlist.core.model import Diagnostic, Severity, SourceLoc
 
 if TYPE_CHECKING:
     from netlist.core.model import (
@@ -28,6 +29,14 @@ if TYPE_CHECKING:
     )
 
 NAME = "hierarchy"
+CODES: dict[str, str] = {
+    "E101": "корневой блок не найден",
+    "W102": "недостижимый блок",
+    "E103": "неизвестный примитив",
+    "W103": "неизвестный примитив (предупреждение)",
+    "E104": "неизвестный блок",
+    "E105": "дублирующееся определение",
+}
 
 
 # Вспомогательный обходчик (если не передан извне)
@@ -242,12 +251,8 @@ def _make_diag(code: str, message: str, check_name: str) -> Diagnostic:
     Примечание: точная структура Diagnostic требует согласования.
     Здесь используется упрощенная версия (словарь) для совместимости.
     """
-    return {
-        "code": code,
-        "message": message,
-        "check": check_name,
-        "severity": "ERROR" if code.startswith("E") else "WARNING"
-    }
+    severity = Severity.ERROR if code.startswith("E") else Severity.WARNING
+    return Diagnostic(code, severity, check_name, message, SourceLoc(None, None))
 
 
 def _sort_diags(diags: list[Diagnostic]) -> list[Diagnostic]:
@@ -257,4 +262,4 @@ def _sort_diags(diags: list[Diagnostic]) -> list[Diagnostic]:
     Сначала по коду (чтобы ошибки шли раньше предупреждений),
     затем по тексту сообщения. Это обеспечивает воспроизводимость.
     """
-    return sorted(diags, key=lambda d: (d["code"], d["message"]))
+    return sorted(diags, key=lambda d: (d.code, d.message))
