@@ -7,12 +7,14 @@
 
 from __future__ import annotations
 
+import base64
 import errno
 import hashlib
 import json
 import os
 import socket
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -271,77 +273,41 @@ def _windows_alive(pid: int) -> bool:
         kernel.CloseHandle(ctypes.c_void_p(handle))
 
 
-def _windows_overlapped_type() -> type:
-    """Создаёт тип структуры смещения для Windows LockFileEx.
-
-    Импорт ctypes отложен, чтобы POSIX-код не зависел от Windows ABI.
-
-    Returns:
-        Тип ctypes.Structure с полями нативной структуры OVERLAPPED.
-    """
-    import ctypes
-    from ctypes import wintypes
-
-    class Overlapped(ctypes.Structure):
-        """Системная структура с нулевым смещением начала диапазона.
-
-        Attributes:
-            _fields_: Поля нативной структуры в порядке Windows ABI.
-            Internal: Служебное состояние операции, изначально нулевое.
-            InternalHigh: Служебный результат операции, изначально нулевой.
-            Offset: Младшая часть смещения блокируемого диапазона.
-            OffsetHigh: Старшая часть смещения блокируемого диапазона.
-            hEvent: Дескриптор события; None для синхронного вызова.
-        """
-
-        _fields_ = [
-            ("Internal", ctypes.c_size_t),
-            ("InternalHigh", ctypes.c_size_t),
-            ("Offset", wintypes.DWORD),
-            ("OffsetHigh", wintypes.DWORD),
-            ("hEvent", wintypes.HANDLE),
-        ]
-
-    return Overlapped
-
-
-def _windows_read_lock(fd: int) -> None:
-    """Запретить запись данных, сохранив чтение документа CLI-чекером.
-
-    Shared LockFileEx сохраняет чтение, запрещённое msvcrt.locking.
+def _open_windows_data(path: str) -> int:
+    """Разрешает другим процессам открывать документ только для чтения.
 
     Args:
-        fd: Открытый дескриптор файла, принадлежащий вызывающему коду.
+        path: Путь к существующему нетлисту.
+
+    Returns:
+        Дескриптор, закрытие которого освобождает запрет Windows.
 
     Raises:
-        OSError: ОС отказала в захвате блокировки данных.
+        OSError: Документ недоступен или уже открыт на запись.
     """
     import ctypes
     import msvcrt
     from ctypes import wintypes
 
-    Overlapped = _windows_overlapped_type()
-
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel.LockFileEx.argtypes = [
-        wintypes.HANDLE,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        ctypes.POINTER(Overlapped),
+    create = kernel.CreateFileW
+    create.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+        ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
     ]
-    overlapped = Overlapped()
-    success = kernel.LockFileEx(
-        msvcrt.get_osfhandle(fd),
-        1,
-        0,
-        0xFFFFFFFF,
-        0xFFFFFFFF,
-        ctypes.byref(overlapped),
+    create.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    generic_read, share_read, open_existing = 0x80000000, 1, 3
+    handle = create(
+        path, generic_read, share_read, None, open_existing, 0, None
     )
-    if not success:
+    if handle == ctypes.c_void_p(-1).value:
         raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+    except BaseException:
+        kernel.CloseHandle(handle)
+        raise
 
 
 class FileManager:
@@ -436,7 +402,7 @@ class FileManager:
             pid, host = int(fields["pid"]), fields["host"]
             timestamp = datetime.fromisoformat(fields["time"])
             local_owner = host == socket.gethostname()
-            stale = local_owner and pid > 0 and not _windows_alive(pid)
+            stale = local_owner and pid > 0 and not _process_alive(pid)
             return LockInfo(pid, host, timestamp, stale)
         except (KeyError, ValueError, OverflowError):
             epoch = datetime.fromtimestamp(0, timezone.utc)
@@ -456,22 +422,32 @@ class FileManager:
             FileLockedError: Файл занят и снятие блокировки запрещено.
             OSError: Не удалось создать или удалить маркер.
         """
-        info = self.check_lock(path)
-        if info is not None:
-            if not (force and info.stale):
-                raise FileLockedError(path, info)
-            os.unlink(lock_path(path))
-        try:
-            return os.open(
-                lock_path(path), os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600
-            )
-        except FileExistsError:
-            # Другой процесс мог захватить файл после check_lock.
-            owner = self.check_lock(path)
-            if owner is None:
-                epoch = datetime.fromtimestamp(0, timezone.utc)
-                owner = LockInfo(0, "unknown", epoch, False)
-            raise FileLockedError(path, owner) from None
+        with _ownership(path):
+            info = self.check_lock(path)
+            if info is not None:
+                if not (force and info.stale):
+                    raise FileLockedError(path, info)
+                os.unlink(lock_path(path))
+            try:
+                fd = os.open(
+                    lock_path(path), os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600
+                )
+            except FileExistsError:
+                # Другой процесс мог захватить файл после check_lock.
+                owner = self.check_lock(path)
+                if owner is None:
+                    epoch = datetime.fromtimestamp(0, timezone.utc)
+                    owner = LockInfo(0, "unknown", epoch, False)
+                raise FileLockedError(path, owner) from None
+            try:
+                _write_marker(fd)
+            except BaseException:
+                try:
+                    os.close(fd)
+                finally:
+                    os.unlink(lock_path(path))
+                raise
+            return fd
 
     def _acquire(
         self, path: str, force: bool = False
@@ -499,23 +475,20 @@ class FileManager:
             raise FileAccessError(*exc.args) from exc
         data_fd = None
         try:
-            timestamp = datetime.now(timezone.utc).isoformat()
-            owner = (
-                f"pid={os.getpid()} host={socket.gethostname()} "
-                f"time={timestamp}\n"
-            )
-            os.write(fd, owner.encode("utf-8"))
-            import msvcrt
-
-            os.lseek(fd, 0x7FFFFFFF, os.SEEK_SET)
-            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            _restore_transaction(path)
             if os.path.exists(path):
-                data_fd = os.open(path, os.O_RDWR)
-                _windows_read_lock(data_fd)
+                data_fd = _open_locked_data(path)
             return fd, data_fd
-        except OSError as exc:
-            self._release(path, fd, data_fd)
-            raise FileAccessError(*exc.args) from exc
+        except BaseException as exc:
+            try:
+                self._release(path, fd, data_fd)
+            except OSError as cleanup:
+                exc.add_note(f"Ошибка очистки блокировки: {cleanup}")
+            if isinstance(exc, OSError) and not isinstance(
+                exc, FileAccessError
+            ):
+                raise FileAccessError(*exc.args) from exc
+            raise
 
     @staticmethod
     def _release(path: str, fd: int, data_fd: int | None) -> None:
@@ -530,13 +503,22 @@ class FileManager:
         Raises:
             OSError: Не удалось закрыть дескриптор или удалить маркер.
         """
-        if data_fd is not None:
-            os.close(data_fd)
-        os.close(fd)
-        try:
-            os.unlink(lock_path(path))
-        except FileNotFoundError:
-            pass  # Повторное удаление отсутствующего маркера безопасно.
+        with _ownership(path):
+            errors = []
+            for handle in (data_fd, fd):
+                if handle is not None:
+                    try:
+                        os.close(handle)
+                    except OSError as exc:
+                        errors.append(exc)
+            try:
+                os.unlink(lock_path(path))
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                errors.append(exc)
+            if errors:
+                raise errors[0]
 
     @staticmethod
     def _read_schematic(path: str, parsed: ParseResult) -> dict | None:
@@ -598,7 +580,9 @@ class FileManager:
             FileAccessError: Не удалось прочитать файл или его геометрию.
         """
         path = os.path.realpath(path)
-        same = self._path is not None and os.path.normcase(path) == os.path.normcase(self._path)
+        same = self._path is not None and os.path.normcase(
+            path
+        ) == os.path.normcase(self._path)
         handles = None if same else self._acquire(path, force_unlock)
         try:
             parsed = self._parser.parse(read_text(path), filename=path)
@@ -662,8 +646,7 @@ class FileManager:
             return
         fd = None
         try:
-            fd = os.open(self._path, os.O_RDWR)
-            _windows_read_lock(fd)
+            fd = _open_locked_data(self._path)
             self._data_fd = fd  # Сохраняем только успешно захваченный fd.
         except OSError as exc:
             if fd is not None:
@@ -686,10 +669,10 @@ class FileManager:
         Raises:
             FileAccessError: Не удалось записать или заблокировать документ.
         """
-        same = self._path is not None and os.path.normcase(target) == os.path.normcase(self._path)
+        current = os.path.normcase(self._path or "")
+        same = current == os.path.normcase(target)
         handles = None if same else self._acquire(target)
         try:
-            # Для replace закрываем данные, удерживая маркер владения.
             if same and self._data_fd is not None:
                 os.close(self._data_fd)
                 self._data_fd = None
@@ -743,6 +726,44 @@ class FileManager:
         )
         return self._save_locked(target, text, sch_text)
 
+    @contextmanager
+    def transaction(self):
+        """Сохраняет журнал старого поколения документа и истории.
+
+        При ошибке восстанавливает файлы; после аварии восстановление
+        происходит при следующем открытии. Успех фиксирует удаление журнала.
+        """
+        path = self._path
+        if path is None:
+            raise ValueError("Транзакция требует открытого документа")
+        targets = [path, schematic_path(path), history_path(path)]
+        snapshots = {}
+        for target in targets:
+            payload = (
+                Path(target).read_bytes() if Path(target).exists() else None
+            )
+            snapshots[target] = (
+                base64.b64encode(payload).decode("ascii")
+                if payload is not None
+                else None
+            )
+        journal = path + ".transaction.json"
+        if Path(journal).exists():
+            raise FileAccessError("Есть незавершённая транзакция")
+        write_text_atomic(journal, json.dumps(snapshots))
+        try:
+            yield
+            Path(journal).unlink()
+        except BaseException:
+            if self._data_fd is not None:
+                os.close(self._data_fd)
+                self._data_fd = None
+            try:
+                _restore_transaction(path)
+            finally:
+                self._restore_data_lock()
+            raise
+
     def close(self) -> None:
         """Освободить документ; повторный вызов ничего не делает.
 
@@ -754,4 +775,148 @@ class FileManager:
                 self._release(self._path, self._lock_fd, self._data_fd)
             except OSError as exc:
                 raise FileAccessError(*exc.args) from exc
-            self._path = self._lock_fd = self._data_fd = None
+            finally:
+                self._path = self._lock_fd = self._data_fd = None
+
+
+@contextmanager
+def _windows_ownership(path: str):
+    """Сериализует операции с маркером документа через mutex Windows.
+
+    Args:
+        path: Канонический путь документа.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateMutexW.argtypes = [
+        ctypes.c_void_p,
+        wintypes.BOOL,
+        wintypes.LPCWSTR,
+    ]
+    kernel.CreateMutexW.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel.ReleaseMutex.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    key = os.path.normcase(os.path.realpath(path)).encode("utf-8")
+    handle = kernel.CreateMutexW(
+        None, False, "Local\\Netlist-" + hashlib.sha256(key).hexdigest()
+    )
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        status = kernel.WaitForSingleObject(handle, 0xFFFFFFFF)
+        if status not in (0, 0x80):
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            yield
+        finally:
+            kernel.ReleaseMutex(handle)
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def _restore_transaction(path: str) -> None:
+    """Восстанавливает прежнее поколение из журнала перед открытием.
+
+    Args:
+        path: Путь документа, маркер которого уже захвачен.
+    """
+    journal = path + ".transaction.json"
+    if not Path(journal).exists():
+        return
+    allowed = [path, schematic_path(path), history_path(path)]
+    try:
+        data = json.loads(read_text(journal))
+        if not isinstance(data, dict) or set(data) != set(allowed):
+            raise ValueError("Неожиданные файлы в журнале")
+        snapshots = {
+            target: (
+                base64.b64decode(payload, validate=True)
+                if payload is not None else None
+            )
+            for target, payload in data.items()
+        }
+    except (TypeError, ValueError) as exc:
+        raise FileAccessError("Некорректный журнал восстановления") from exc
+
+    # Сначала проверяем все записи, чтобы битый журнал не восстановил
+    # только часть комплекта файлов.
+    for target in allowed:
+        payload = snapshots[target]
+        if payload is None:
+            Path(target).unlink(missing_ok=True)
+        else:
+            _write_bytes_atomic(target, payload)
+    Path(journal).unlink()
+
+
+def _write_marker(fd: int) -> None:
+    """Записывает владельца и блокирует служебный диапазон маркера.
+
+    Args:
+        fd: Дескриптор созданного маркера.
+    """
+    timestamp = datetime.now(timezone.utc).isoformat()
+    owner = (
+        f"pid={os.getpid()} host={socket.gethostname()} " f"time={timestamp}\n"
+    )
+    os.write(fd, owner.encode("utf-8"))
+    if os.name == "nt":
+        import msvcrt
+
+        os.lseek(fd, 0x7FFFFFFF, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+
+
+def _process_alive(pid: int) -> bool:
+    """Проверяет локальный PID без отправки сигнала процессу."""
+    if os.name == "nt":
+        return _windows_alive(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OverflowError):
+        # Недоступный или сомнительный PID не даёт права снять маркер.
+        return True
+    return True
+
+
+def _open_locked_data(path: str) -> int:
+    """Открывает данные под системной блокировкой текущей платформы."""
+    if os.name == "nt":
+        return _open_windows_data(path)
+
+    import fcntl
+
+    fd = os.open(path, os.O_RDWR)
+    try:
+        # Чтение через другой дескриптор не снимает flock.
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+@contextmanager
+def _ownership(path: str):
+    """Сериализует чтение, замену и удаление маркера между процессами."""
+    if os.name == "nt":
+        with _windows_ownership(path):
+            yield
+        return
+
+    import fcntl
+
+    # Имя должно всегда указывать на один inode. Удаление после unlock
+    # позволило бы ожидающему процессу и новичку взять разные блокировки.
+    guard = lock_path(path) + ".guard"
+    fd = os.open(guard, os.O_CREAT | os.O_RDWR, 0o666)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)

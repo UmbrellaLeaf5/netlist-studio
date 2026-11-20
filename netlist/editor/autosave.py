@@ -7,6 +7,7 @@ EditorMainWindow передаёт get_state, возвращающий после
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
@@ -156,8 +157,9 @@ class Autosave(QObject):
         if self._fm.current_path is None:
             raise RuntimeError("У документа нет пути для автосохранения")
         state = self._get_state()
-        result = self._fm.save(state.model, state.schematic)
-        state.undo_stack.save(history_path(result.path), result.sha256)
+        with self._fm.transaction():
+            result = self._fm.save(state.model, state.schematic)
+            state.undo_stack.save(history_path(result.path), result.sha256)
         return result.path
 
     def flush(self) -> bool:
@@ -177,12 +179,19 @@ class Autosave(QObject):
         self._flushing = True
         revision = self._revision
         try:
-            path = self._save_state()
+            try:
+                path = self._save_state()
+            except OSError as exc:
+                self.failed.emit(str(exc))
+                return False
+            except Exception as exc:
+                self.disable()
+                logging.getLogger(__name__).exception("Дефект автосохранения")
+                self.failed.emit(str(exc))
+                return False
             self._dirty = revision != self._revision
             self.saved.emit(path)
             return True
-        except Exception as exc:
-            self.failed.emit(str(exc))
-            return False
         finally:
+            # Синхронный слот saved/failed тоже может вызвать flush().
             self._flushing = False
