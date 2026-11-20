@@ -12,7 +12,7 @@
 
 from typing import Protocol
 
-from netlist.core.diagnostics import PinRef, SourceLoc
+from netlist.core.diagnostics import InstanceKind, PinRef, SourceLoc
 
 
 class PrimitiveView(Protocol):
@@ -42,13 +42,9 @@ class InstanceView(Protocol):
     """Размещённое использование определения блока или примитива."""
 
     name: str
+    kind: InstanceKind
     type_name: str
     loc: SourceLoc
-
-    @property
-    def kind(self) -> str:
-        """Строковое значение «sub» или «prim»; модель хранит InstanceKind."""
-        ...
 
     def pins(self) -> list[PinView]:
         """Пины в порядке упоминания, включая повторы в черновике."""
