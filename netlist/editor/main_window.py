@@ -12,10 +12,9 @@ from __future__ import annotations
 import os
 import sys
 
-from PyQt5.QtCore import QSettings, Qt
-from PyQt5.QtGui import QColor, QFont, QKeySequence
-from PyQt5.QtWidgets import (
-    QAction,
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QAction, QColor, QFont, QKeySequence
+from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QInputDialog,
@@ -892,7 +891,7 @@ class EditorMainWindow(QMainWindow):
         QMessageBox.about(
             self, "О программе",
             "Нетлист — редактор иерархических нетлистов.\n"
-            "PyQt5, формат .net и .sch.json.",
+            "PySide6, формат .net и .sch.json.",
         )
 
     def closeEvent(self, event) -> None:
@@ -922,7 +921,7 @@ def main(argv: list[str] | None = None) -> int:
     window.show()
     if arguments:
         window.open_document(arguments[0])
-    return app.exec_()
+    return app.exec()
 
 
 __all__ = ["EditorMainWindow", "main"]

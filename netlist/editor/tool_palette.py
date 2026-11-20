@@ -9,8 +9,9 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, pyqtSignal as Signal
-from PyQt5.QtWidgets import QAction, QActionGroup, QToolBar, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtWidgets import QToolBar, QWidget
 
 from netlist.editor.canvas import Tool
 

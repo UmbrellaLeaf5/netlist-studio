@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import json
 
-from PyQt5.QtCore import QMimeData, Qt, pyqtSignal as Signal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import QMimeData, Qt, Signal
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QLabel,
@@ -201,7 +201,7 @@ class BlockList(QWidget):
         up = menu.addAction("Вверх")
         down = menu.addAction("Вниз")
         properties = menu.addAction("Свойства…")
-        action = menu.exec_(self.blocks.mapToGlobal(position))
+        action = menu.exec(self.blocks.mapToGlobal(position))
         if action is create:
             self.createRequested.emit()
         elif action is delete:
