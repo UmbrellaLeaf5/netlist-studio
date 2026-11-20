@@ -342,11 +342,12 @@ class NetView(Protocol):
     loc: SourceLoc
 
 class InstanceView(Protocol):
-    name: str
-    kind: InstanceKind
-    type_name: str         # имя блока или примитива
-    loc: SourceLoc
-    def pins(self) -> list[PinView]        # пины, упомянутые в строках INST.PIN
+    name: str              # имя экземпляра внутри содержащего блока
+    type_name: str         # имя определения блока или примитива
+    loc: SourceLoc         # позиция объявления inst
+    @property
+    def kind(self) -> str  # "sub" или "prim"
+    def pins(self) -> list[PinView]  # пины экземпляра в порядке документа
 
 class OrphanConnection(Protocol):          # строка INST.PIN с необъявленным INST
     ref: PinRef
@@ -371,6 +372,11 @@ class NetlistView(Protocol):
 
 `find_block` и `find_primitive` возвращают первое вхождение имени. Дубликаты ищут проверки, для
 этого у ModelUtils есть индексы со списками.
+
+`InstanceView.kind` доступен для чтения как строка: `"sub"` для подсхемы, `"prim"` для
+примитива. Принятый `Instance` хранит `InstanceKind` (подкласс `str`), а черновики могут
+хранить обычные строки. `pins()` возвращает пины самого экземпляра, а не список пинов
+его определения. В черновике порядок и повторы строк `INST.PIN` сохраняются.
 
 #### Классы принятой модели
 
@@ -444,6 +450,11 @@ class Instance:
 
 `connect_pin` с цепью, которая не объявлена в блоке, бросает `ModelError`.
 `Pin`, `Net`, `Primitive` — простые классы данных с полями из протоколов.
+
+Объекты одного класса принятой модели сравниваются по содержимому (`==`), включая
+`SourceLoc` и `Netlist.source_file`. Порядок определений, цепей, экземпляров и пинов
+учитывается. Сравнение не раскрывает подсхемы по `type_name` и не переходит от
+экземпляра к его содержащему блоку.
 
 ---
 
