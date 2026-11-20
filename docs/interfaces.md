@@ -232,6 +232,11 @@ end
 Если `netlist_sha256` не совпадает с хэшем текущего `.net` (файл меняли вне редактора), история
 отбрасывается, а пользователь получает предупреждение.
 
+Новые файлы истории также содержат `schematic_sha256`: хэш соседнего `.sch.json`
+или `null`, если схематика при сохранении не было. Если поле есть и не совпадает
+с текущим состоянием, история отбрасывается. В старых файлах версии 1 это поле
+может отсутствовать. Для них достаточно совпадения хэша `.net`.
+
 ### 1.8. Файл блокировки `<имя>.net.lock`
 
 Создаёт FileManager. Содержит одну строку: `pid=<pid> host=<hostname> time=<ISO-8601>`.
@@ -647,6 +652,7 @@ class FileManager:
     def new(self) -> None
     def open(self, path: str, force_unlock: bool = False) -> OpenResult
     def save(self, model: Netlist, schematic: dict, path: str | None = None) -> SaveResult
+    def transaction(self) -> ContextManager[None]
     def close(self) -> None
     def check_lock(self, path: str) -> LockInfo | None
 ```
@@ -668,6 +674,11 @@ class FileManager:
   Если передан `path`, это «сохранить как»: новый файл блокируется, старая блокировка снимается,
   `current_path` меняется. Для нового документа `path` обязателен, иначе `ValueError`. Возвращает
   `SaveResult` с хэшем `.net`, он нужен UndoStack для привязки истории.
+- `transaction()` требует открытого документа. Контекст сохраняет прежние
+  `.net`, `.sch.json` и `.history.json` в журнале. При успехе журнал удаляется.
+  При исключении файлы восстанавливаются, а исключение передаётся вызывающему
+  коду. Оставшийся после аварии журнал применяется при следующем открытии
+  после захвата блокировки. Повреждённый журнал приводит к `FileAccessError`.
 - `close()` снимает блокировку и удаляет lock-файл. Можно вызывать повторно.
 - `check_lock(path)` — кто держит блокировку файла, или `None`.
 
@@ -717,6 +728,8 @@ class UndoStack:
     def redo_text(self) -> str | None
     def begin_macro(self, text: str) -> None
     def end_macro(self) -> None
+    def abort_macro(self) -> None
+    def macro(self, text: str) -> ContextManager[None]
     def clear(self) -> None
     index: int; count: int                        # только чтение
     def add_listener(self, fn: Callable[[], None]) -> None
@@ -729,6 +742,9 @@ class UndoStack:
 - `undo()` и `redo()` возвращают `False`, если делать нечего.
 - `begin_macro` и `end_macro` объединяют несколько команд в одну составную, которая отменяется
   целиком. Пример — «Копировать блок».
+- `abort_macro()` отменяет команды открытой группы. Без открытой группы
+  выбрасывает `RuntimeError`. Контекст `macro(text)` закрывает группу при
+  успехе и откатывает её при исключении, передавая исключение вызывающему коду.
 - `clear()` очищает историю. Вызывается при создании нового документа: история идёт «до момента
   создания файла».
 - `add_listener(fn)` — `fn()` вызывается после любого изменения стека. Так ToolPalette
@@ -775,7 +791,11 @@ class Autosave(QObject):
 - `mark_dirty()` вызывается, когда принятая модель изменилась (после `Canvas.commit`).
 - По таймеру, а также при вызове `flush()`, если состояние «грязное», выполняется
   `file_manager.save(state.model, state.schematic)` и затем `state.undo_stack.save(history_path, sha)`.
-  После успеха испускается `saved`, после ошибки — `failed`, а флаг «грязно» остаётся.
+  Обе записи выполняются внутри `file_manager.transaction()`. После успеха
+  испускается `saved`, после ошибки — `failed`, а флаг «грязно» остаётся.
+  При `OSError` таймер продолжает работу. При остальных исключениях таймер
+  останавливается. Повторный вызов `flush()` из обработчика сигнала возвращает
+  `False` до завершения текущего сохранения.
   `flush()` возвращает признак успеха и вызывается при закрытии окна.
 
 ---

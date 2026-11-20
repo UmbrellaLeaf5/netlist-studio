@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import abc
 import json
+import logging
+from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable, ClassVar
 
-from .file_manager import read_text, write_text_atomic
+from .file_manager import file_sha256, read_text, write_text_atomic
 
 if TYPE_CHECKING:
     from .canvas import Canvas
@@ -349,7 +352,12 @@ class UndoStack:
     def _notify(self) -> None:
         """Оповестить снимок подписчиков: callback может добавить слушателя."""
         for fn in tuple(self._listeners):
-            fn()
+            try:
+                fn()
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Ошибка слушателя истории"
+                )
 
     def _idle(self) -> None:
         """Не разрешить сохранение или сброс незавершённой группы команд.
@@ -385,7 +393,12 @@ class UndoStack:
         Args:
             cmd: Новая команда для выполнения и добавления в историю.
         """
-        cmd.redo(self._canvas)
+        try:
+            cmd.redo(self._canvas)
+        except BaseException:
+            if self._macros:
+                self.abort_macro()
+            raise
         if self._macros:
             self._append(self._macros[-1].commands, cmd)
         else:
@@ -465,6 +478,37 @@ class UndoStack:
         self._macros.append(_Macro(text, []))
         self._notify()  # Кнопки undo/redo временно становятся недоступными.
 
+    def abort_macro(self) -> None:
+        """Откатывает успешно выполненные команды открытой группы.
+
+        Raises:
+            RuntimeError: Нет открытой группы.
+        """
+        if not self._macros:
+            raise RuntimeError("Нет открытой макрокоманды")
+        macro = self._macros[-1]
+        macro.undo(self._canvas)
+        self._macros.pop()
+        self._notify()
+
+    @contextmanager
+    def macro(self, text: str):
+        """Закрывает группу при успехе и откатывает при исключении.
+
+        Args:
+            text: Подпись группы.
+        """
+        self.begin_macro(text)
+        current = self._macros[-1]
+        try:
+            yield
+        except BaseException:
+            if self._macros and self._macros[-1] is current:
+                self.abort_macro()
+            raise
+        else:
+            self.end_macro()
+
     def end_macro(self) -> None:
         """Закончить группу без повторного применения её команд к Canvas.
 
@@ -510,6 +554,7 @@ class UndoStack:
         self._idle()
         data = {
             "version": 1,
+            "schematic_sha256": _schematic_hash(path),
             "netlist_sha256": netlist_sha256,
             "index": self._index,
             "commands": [_encoded(cmd) for cmd in self._commands],
@@ -538,6 +583,11 @@ class UndoStack:
         self._commands, self._index = [], 0
         try:
             data = json.loads(read_text(path))
+            # Старые истории v1 не содержат хэша схематика. Явный null
+            # в новом файле, напротив, означает, что схематика не было.
+            if (isinstance(data, dict) and "schematic_sha256" in data
+                    and data["schematic_sha256"] != _schematic_hash(path)):
+                raise ValueError("Геометрия не соответствует истории")
             commands, index = _decode_history(data, netlist_sha256)
         except Exception:
             # Частично восстановленная история опаснее полного отказа:
@@ -547,3 +597,21 @@ class UndoStack:
         self._commands, self._index = commands, index
         self._notify()
         return True
+
+
+def _schematic_hash(path: str) -> str | None:
+    """Вычисляет хэш геометрии для стандартного имени истории.
+
+    Args:
+        path: Путь истории вида name.history.json.
+
+    Returns:
+        Хэш геометрии либо None при отсутствии файла.
+    """
+    suffix = ".history.json"
+    if not str(path).endswith(suffix):
+        return None
+    companion = str(path)[: -len(suffix)] + ".sch.json"
+    if not Path(companion).exists():
+        return None
+    return file_sha256(companion)
