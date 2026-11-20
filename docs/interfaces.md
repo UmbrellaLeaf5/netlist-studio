@@ -343,10 +343,9 @@ class NetView(Protocol):
 
 class InstanceView(Protocol):
     name: str              # имя экземпляра внутри содержащего блока
+    kind: InstanceKind     # элемент enum: InstanceKind.SUB или InstanceKind.PRIM
     type_name: str         # имя определения блока или примитива
     loc: SourceLoc         # позиция объявления inst
-    @property
-    def kind(self) -> str  # "sub" или "prim"
     def pins(self) -> list[PinView]  # пины экземпляра в порядке документа
 
 class OrphanConnection(Protocol):          # строка INST.PIN с необъявленным INST
@@ -373,10 +372,10 @@ class NetlistView(Protocol):
 `find_block` и `find_primitive` возвращают первое вхождение имени. Дубликаты ищут проверки, для
 этого у ModelUtils есть индексы со списками.
 
-`InstanceView.kind` доступен для чтения как строка: `"sub"` для подсхемы, `"prim"` для
-примитива. Принятый `Instance` хранит `InstanceKind` (подкласс `str`), а черновики могут
-хранить обычные строки. `pins()` возвращает пины самого экземпляра, а не список пинов
-его определения. В черновике порядок и повторы строк `INST.PIN` сохраняются.
+`InstanceView.kind` — элемент строкового перечисления `InstanceKind`: `InstanceKind.SUB`
+для подсхемы (значение `"sub"`) или `InstanceKind.PRIM` для примитива (значение `"prim"`).
+`pins()` возвращает пины самого экземпляра, а не список пинов его определения.
+В черновике порядок и повторы строк `INST.PIN` сохраняются.
 
 #### Классы принятой модели
 
