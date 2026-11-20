@@ -1,252 +1,143 @@
-"""
-MODEL_UTILS
+"""Индексы и поиск по NetlistView без изменения модели.
 
-Вспомогательные утилиты для работы с нетлистом.
-
-Модуль содержит функции для поиска дубликатов, построения индексов
-и разрешения типов экземпляров. Функции не изменяют исходную модель
-(NetlistView) и не создают диагностик (Diagnostic).
+Исправленная версия приложенного model_utils.py. Коллекции сохраняют
+дубликаты; подключения читаются через публичные протоколы модели.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Iterable, TypeVar
+from collections.abc import Callable, Iterable, Iterator
+from typing import TypeVar
 
-if TYPE_CHECKING:
-    from netlist.core.model import (
-        BlockView,
-        InstanceView,
-        NetView,
-        NetlistView,
-        PinRef,
-        PrimitiveView,
-        SourceLoc,
-    )
+from netlist.core.model import (
+    BlockView, InstanceView, NetlistView, NetView, PinRef, PinView,
+    PrimitiveView, SourceLoc,
+)
 
 T = TypeVar("T")
 
 
-# Поиск дубликатов
-
-
-def find_duplicates(
-        items: Iterable[T],
-        key: Callable[[T], str]
-) -> dict[str, list[T]]:
-    """
-    Находит элементы с одинаковыми ключами.
-
-    Проходит по коллекции ровно один раз. Возвращает словарь, где
-    ключ — это значение, полученное через `key(item)`, а значение —
-    список всех элементов с этим ключом. Если ключ уникален, он не
-    попадает в результат.
-
-    Сложность: O(n) по времени, O(n) по памяти.
-    Порядок элементов в списках сохраняется исходным.
-    """
-    key_to_items: dict[str, list[T]] = {}
+def _index(items: Iterable[T], key: Callable[[T], str]) -> dict[str, list[T]]:
+    result: dict[str, list[T]] = {}
     for item in items:
-        k = key(item)
-        if k not in key_to_items:
-            key_to_items[k] = []
-        key_to_items[k].append(item)
-
-    # Оставляем только те ключи, где элементов больше одного.
-    return {k: v for k, v in key_to_items.items() if len(v) > 1}
+        result.setdefault(key(item), []).append(item)
+    return result
 
 
-# Индексация блоков и сетей
+def find_duplicates(items: Iterable[T], key: Callable[[T], str]) -> dict[str, list[T]]:
+    return {name: group for name, group in _index(items, key).items() if len(group) > 1}
 
 
 def index_blocks(view: NetlistView) -> dict[str, list[BlockView]]:
-    """
-    Строит индекс блоков по их именам.
+    return _index(view.blocks(), lambda b: b.name)
 
-    Возвращает словарь, где ключ — имя блока, а значение — список
-    всех блоков с этим именем. Дубликаты имен не отбрасываются,
-    чтобы проверки могли их обнаружить.
 
-    Сложность: O(B), где B — количество блоков в модели.
-    """
-    name_to_blocks: dict[str, list[BlockView]] = {}
-    for block in view.blocks():
-        name = block.name
-        if name not in name_to_blocks:
-            name_to_blocks[name] = []
-        name_to_blocks[name].append(block)
-    return name_to_blocks
+def index_primitives(view: NetlistView) -> dict[str, list[PrimitiveView]]:
+    return _index(view.primitives(), lambda p: p.name)
+
+
+def index_instances(block: BlockView) -> dict[str, list[InstanceView]]:
+    return _index(block.instances(), lambda i: i.name)
 
 
 def index_nets(block: BlockView) -> dict[str, list[NetView]]:
-    """
-    Строит индекс сетей внутри одного блока.
-
-    Возвращает словарь, где ключ — имя сети, а значение — список
-    всех сетей с этим именем в данном блоке. Дубликаты сохраняются.
-
-    Сложность: O(N), где N — количество сетей в блоке.
-    """
-    name_to_nets: dict[str, list[NetView]] = {}
-    for net in block.nets():
-        name = net.name
-        if name not in name_to_nets:
-            name_to_nets[name] = []
-        name_to_nets[name].append(net)
-    return name_to_nets
+    return _index(block.nets(), lambda n: n.name)
 
 
-# Индексация подключений пинов
+def index_pins(block: BlockView) -> dict[str, list[PinView]]:
+    return _index(block.pins(), lambda p: p.name)
 
 
-def pins_of_net(
-        block: BlockView
-) -> dict[str, list[tuple[PinRef, SourceLoc]]]:
-    """
-    Строит индекс подключений пинов к сетям в блоке.
-
-    Возвращает словарь: имя сети -> список пар (PinRef, SourceLoc).
-    Где PinRef — ссылка на вывод, а SourceLoc — место в файле, где
-    это подключение было описано.
-
-    Подключения с net=None (явно неподключенные) в индекс не входят,
-    так как они не привязаны к имени сети.
-
-    Сложность: O(C), где C — количество подключений в блоке.
-    """
-    net_name_to_pins: dict[str, list[tuple[PinRef, SourceLoc]]] = {}
-
-    # Предполагаем, что у блока есть метод для перебора подключений.
-    # В зависимости от модели это могут быть инстансы и их пины.
-    for conn in block.connections():
-        net_name = conn.net_name
-        if net_name is None:
-            continue
-
-        if net_name not in net_name_to_pins:
-            net_name_to_pins[net_name] = []
-
-        net_name_to_pins[net_name].append((conn.pin_ref, conn.loc))
-
-    return net_name_to_pins
+def _connections(block: BlockView) -> Iterator[tuple[PinRef, str | None, SourceLoc]]:
+    for pin in block.pins():
+        yield PinRef(None, pin.name), pin.net, pin.loc
+    for inst in block.instances():
+        for pin in inst.pins():
+            yield PinRef(inst.name, pin.name), pin.net, pin.loc
+    for conn in block.orphan_connections():
+        yield conn.ref, conn.net, conn.loc
 
 
-# Разрешение типов экземпляров
+def pins_of_net(block: BlockView) -> dict[str, list[tuple[PinRef, SourceLoc]]]:
+    """Все подключения, включая повторы и orphan; None исключается."""
+    result: dict[str, list[tuple[PinRef, SourceLoc]]] = {}
+    for ref, net, loc in _connections(block):
+        if net is not None:
+            result.setdefault(net, []).append((ref, loc))
+    return result
 
 
-def resolve_type(
-        view: NetlistView,
-        inst: InstanceView
-) -> BlockView | PrimitiveView | None:
-    """
-    Находит определение типа для конкретного экземпляра.
-
-    Экземпляр может ссылаться либо на блок (подсхему), либо на
-    примитив. Функция ищет совпадение по имени типа среди блоков
-    и примитивов.
-
-    Возвращает:
-      - BlockView, если найден блок.
-      - PrimitiveView, если найден примитив.
-      - None, если тип не найден.
-
-    Если найдено несколько определений с одинаковым именем (что
-    является ошибкой модели), возвращается None, чтобы не выбирать
-    произвольный вариант. Такие случаи должна обрабатывать проверка
-    иерархии (HierarchyCheck).
-    """
-    type_name = inst.type_name
-
-    # Ищем среди блоков. Используем генератор, чтобы не создавать
-    # промежуточный список и сразу остановиться при нахождении.
-    blocks = [b for b in view.blocks() if b.name == type_name]
-
-    # Аналогично для примитивов.
-    primitives = [p for p in view.primitives() if p.name == type_name]
-
-    # Если совпадений нет ни там, ни там — тип не найден.
-    if not blocks and not primitives:
-        return None
-
-    # Если найдено ровно одно определение блока — возвращаем его.
-    if len(blocks) == 1 and not primitives:
-        return blocks[0]
-
-    # Если найден ровно один примитив — возвращаем его.
-    if len(primitives) == 1 and not blocks:
-        return primitives[0]
-
-    # Любая неоднозначность (несколько блоков, несколько примитивов,
-    # или блок и примитив с одинаковым именем) считается ошибкой.
+def net_of_pin(block: BlockView, ref: PinRef) -> str | None:
+    for candidate, net, _ in _connections(block):
+        if candidate == ref:
+            return net
     return None
 
 
-# Кэш индексов
+def block_pin_names(block: BlockView) -> list[str]:
+    return [pin.name for pin in block.pins()]
+
+
+def instance_pin_names(inst: InstanceView) -> list[str]:
+    return [pin.name for pin in inst.pins()]
+
+
+def resolve_type(view: NetlistView, inst: InstanceView) -> BlockView | PrimitiveView | None:
+    """Первое определение в пространстве имён, соответствующем kind."""
+    if inst.kind == "sub":
+        return view.find_block(inst.type_name)
+    if inst.kind == "prim":
+        return view.find_primitive(inst.type_name)
+    return None
+
+
+def iter_instances(view: NetlistView) -> Iterator[tuple[BlockView, InstanceView]]:
+    for block in view.blocks():
+        for inst in block.instances():
+            yield block, inst
 
 
 class ModelIndex:
+    """Кэш одного представления; после изменений создаётся новый индекс.
+
+    init оставлен для совместимости с приложенной версией; основной API —
+    ModelIndex(view). Ссылки на блоки предотвращают повторное использование
+    id временных BlockView, пока их индексы находятся в кэше.
     """
-    Кэш для хранения индексов модели.
 
-    Позволяет проверкам не пересчитывать индексы блоков, сетей и
-    подключений при каждом вызове. Кэш привязан к конкретной модели
-    (NetlistView) и должен инициализироваться через `init`.
-    """
-
-    def __init__(self) -> None:
-        """
-        Создает пустой экземпляр кэша.
-
-        До вызова `init` методы `nets` и `pins_of_net` будут
-        возвращать пустые словари или выбрасывать исключение.
-        (В текущей реализации — возвращать пустые словари).
-        """
-        self._view: NetlistView | None = None
-        self._blocks_index: dict[str, list[BlockView]] = {}
+    def __init__(self, view: NetlistView | None = None) -> None:
+        self._view = view
+        self._blocks: dict[str, list[BlockView]] | None = None
+        self._primitives: dict[str, list[PrimitiveView]] | None = None
         self._nets_cache: dict[int, dict[str, list[NetView]]] = {}
         self._pins_cache: dict[int, dict[str, list[tuple[PinRef, SourceLoc]]]] = {}
+        self._owners: dict[int, BlockView] = {}
 
     def init(self, view: NetlistView) -> None:
-        """
-        Инициализирует кэш для указанной модели.
+        self.__init__(view)
 
-        Если кэш уже был инициализирован для другой модели, он
-        полностью заменяется новым. Это гарантирует, что старые
-        данные не будут использованы с новой моделью.
-        """
-        self._view = view
-        self._blocks_index = index_blocks(view)
+    @property
+    def blocks(self) -> dict[str, list[BlockView]]:
+        if self._blocks is None:
+            self._blocks = index_blocks(self._view) if self._view is not None else {}
+        return self._blocks
 
-        # Очищаем кэши для блоков, так как они относятся к старой модели.
-        self._nets_cache.clear()
-        self._pins_cache.clear()
+    @property
+    def primitives(self) -> dict[str, list[PrimitiveView]]:
+        if self._primitives is None:
+            self._primitives = index_primitives(self._view) if self._view is not None else {}
+        return self._primitives
 
     def nets(self, block: BlockView) -> dict[str, list[NetView]]:
-        """
-        Возвращает индекс сетей для указанного блока.
+        key = id(block)
+        if key not in self._nets_cache:
+            self._owners[key] = block
+            self._nets_cache[key] = index_nets(block)
+        return self._nets_cache[key]
 
-        Если индекс для этого блока уже был построен ранее, он
-        возвращается из кэша. Если нет — строится и сохраняется.
-
-        Ключом кэша служит `id(block)`, чтобы даже блоки с
-        одинаковыми именами не перезаписывали друг друга.
-        """
-        block_id = id(block)
-        if block_id not in self._nets_cache:
-            self._nets_cache[block_id] = index_nets(block)
-        return self._nets_cache[block_id]
-
-    def pins_of_net(
-            self,
-            block: BlockView
-    ) -> dict[str, list[tuple[PinRef, SourceLoc]]]:
-        """
-        Возвращает индекс подключений пинов для указанного блока.
-
-        Работает аналогично методу `nets`: при первом вызове для
-        блока строит индекс и кэширует его, при повторном — отдает
-        готовый результат.
-        """
-        block_id = id(block)
-        if block_id not in self._pins_cache:
-            self._pins_cache[block_id] = pins_of_net(block)
-        return self._pins_cache[block_id]
+    def pins_of_net(self, block: BlockView) -> dict[str, list[tuple[PinRef, SourceLoc]]]:
+        key = id(block)
+        if key not in self._pins_cache:
+            self._owners[key] = block
+            self._pins_cache[key] = pins_of_net(block)
+        return self._pins_cache[key]

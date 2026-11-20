@@ -1,243 +1,140 @@
-"""
-SYNTAXCHECK
+"""SyntaxCheck: грамматика .net и общая лексика для NetlistParser.
 
-Модуль синтаксической проверки исходного текста нетлиста.
-
-Отвечает за лексический анализ строк (токенизацию), классификацию
-строк по видам (LineKind) и проверку синтаксической корректности
-файла (check_lines).
-Модульная проверка check() возвращает пустой список, так как
-синтаксис уже был проверен на этапе разбора текста.
+Исправленная версия приложенного syntaxcheck.py по review_checker_modules.md.
+Семантические ссылки и повторные имена здесь не проверяются.
 """
 
 from __future__ import annotations
 
 import re
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Sequence
+from typing import Sequence
 
-if TYPE_CHECKING:
-    from netlist.core.model import Diagnostic, NetlistView, CheckOptions
+from netlist.core.model import CheckOptions, Diagnostic, NetlistView, Severity, SourceLoc
 
 NAME = "syntax"
-
-# Базовый набор зарезервированных слов (требует согласования).
-KEYWORDS: frozenset[str] = frozenset({
-    "main", "pin", "instance", "primitive", "net"
-})
-
-# Регулярное выражение для допустимого идентификатора.
-# Разрешаем буквы, цифры и подчеркивания, не начиная с цифры.
-ID_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+KEYWORDS = frozenset({"block", "end", "pin", "net", "inst", "sub", "prim", "primitive"})
+ID_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 class LineKind(Enum):
-    """
-    Виды синтаксических строк нетлиста.
-
-    Каждое значение соответствует определенной грамматической форме.
-    """
-    EMPTY = auto()  # Пустая строка или только комментарий
-    BLOCK_START = auto()  # Начало блока: "block_name:"
-    PIN = auto()  # Внешний пин: "pin name net"
-    INSTANCE = auto()  # Объявление инстанса: "inst name: type"
-    CONNECTION = auto()  # Подключение: "inst.pin net"
-    UNKNOWN = auto()  # Неизвестная форма
-
-
-# Лексический анализ и классификация
+    BLANK = auto()
+    PRIMITIVE = auto()
+    BLOCK = auto()
+    END = auto()
+    PIN = auto()
+    NET = auto()
+    INST = auto()
+    CONN = auto()
 
 
 def tokenize(line: str) -> list[str]:
-    """
-    Разбивает строку на токены, удаляя комментарии.
-
-    Комментарием считается всё, что начинается с символа '#'
-    (требует согласования, но это стандарт для подобных форматов).
-    Возвращает пустой список для пустых строк или строк-комментариев.
-    """
-    # Отрезаем комментарий, если он есть.
-    comment_start = line.find("#")
-    if comment_start != -1:
-        line = line[:comment_start]
-
-    # Разбиваем по пробелам и отбрасываем пустые токены.
-    # Используем split() без аргументов, чтобы убрать лишние пробелы.
-    return line.split()
+    """Удалить комментарий; разделители — только пробел и табуляция."""
+    text = line.split("#", 1)[0].strip(" \t")
+    return re.split(r"[ \t]+", text) if text else []
 
 
-def classify(tokens: list[str]) -> LineKind:
-    """
-    Определяет вид строки по списку токенов.
-
-    Возвращает LineKind.EMPTY для пустого списка, UNKNOWN, если
-    форма не распознана. Диагностика ошибки формируется в
-    check_lines, а не здесь.
-    """
+def classify(tokens: list[str]) -> LineKind | None:
+    """Определить вид строки независимо от количества аргументов."""
     if not tokens:
-        return LineKind.EMPTY
-
-    first = tokens[0]
-
-    # Начало блока: одиночный токен, заканчивающийся на ':'
-    if len(tokens) == 1 and first.endswith(":"):
-        return LineKind.BLOCK_START
-
-    # Внешний пин блока: "pin name net"
-    if first == "pin" and len(tokens) == 3:
-        return LineKind.PIN
-
-    # Объявление инстанса: "instance name: type"
-    # или просто "inst name type" (требует согласования).
-    if first in ("instance", "inst") and len(tokens) in (3, 4):
-        return LineKind.INSTANCE
-
-    # Подключение пина: "inst.pin net"
-    # Проверяем, что первый токен содержит точку.
-    if "." in first and len(tokens) == 2:
-        return LineKind.CONNECTION
-
-    return LineKind.UNKNOWN
-
-
-# Синтаксическая проверка файла
+        return LineKind.BLANK
+    kinds = {
+        "primitive": LineKind.PRIMITIVE, "block": LineKind.BLOCK,
+        "end": LineKind.END, "pin": LineKind.PIN,
+        "net": LineKind.NET, "inst": LineKind.INST,
+    }
+    if tokens[0] in kinds:
+        return kinds[tokens[0]]
+    if "." in tokens[0]:
+        return LineKind.CONN
+    return None
 
 
 class SyntaxCheck:
-    """
-    Проверяет синтаксис исходного текста нетлиста.
-
-    Хранит состояние контекста (внутри блока или снаружи) и
-    накапливает диагностики.
-    """
-
-    def check_lines(
-            self,
-            lines: Sequence[str],
-            filename: str | None = None
-    ) -> list[Diagnostic]:
-        """
-        Проверяет строки файла и возвращает список ошибок.
-
-        Обрабатывает строки последовательно, собирая все возможные
-        ошибки, а не останавливаясь на первой. При ошибке пытается
-        восстановить контекст, чтобы продолжить проверку.
-        """
+    def check_lines(self, lines: Sequence[str], filename: str | None = None
+                    ) -> list[Diagnostic]:
         diags: list[Diagnostic] = []
-        in_block = False
+        current: str | None = None
+        opened_at: int | None = None
 
-        for line_num, line in enumerate(lines, start=1):
+        def error(code: str, message: str, number: int,
+                  obj: str | None = None) -> None:
+            diags.append(Diagnostic(code, Severity.ERROR, NAME, message,
+                                    SourceLoc(filename, number), current, obj))
+
+        counts = {LineKind.BLOCK: 2, LineKind.END: 1, LineKind.PIN: 3,
+                  LineKind.NET: 2, LineKind.INST: 4, LineKind.CONN: 2}
+        for number, line in enumerate(lines, 1):
+            # Проверяем и комментарии: весь файл должен быть ASCII.
+            if not line.isascii():
+                error("E108", "недопустимый не-ASCII символ", number)
+                continue
+            if any(ord(c) < 32 and c != "\t" or ord(c) == 127 for c in line):
+                error("E101", "недопустимый управляющий символ", number)
+                continue
             tokens = tokenize(line)
             kind = classify(tokens)
-
-            if kind == LineKind.EMPTY:
+            if kind == LineKind.BLANK:
+                continue
+            if kind is None:
+                error("E101", "нераспознанный тип строки", number)
+                continue
+            if (kind == LineKind.PRIMITIVE and len(tokens) < 2
+                    or kind in counts and len(tokens) != counts[kind]):
+                error("E103", "неверное число элементов строки", number)
                 continue
 
-            # Проверка идентификаторов в токенах, где они ожидаются.
-            id_error = self._check_identifiers(tokens, kind, line_num, filename)
-            if id_error:
-                diags.extend(id_error)
-
-            # Проверка количества токенов (уже частично сделана в classify).
-            if kind == LineKind.UNKNOWN:
-                diags.append(self._make_diag(
-                    "E001", "Нераспознанная строка",
-                    line_num, filename
-                ))
-                continue
-
-            # Проверка контекста: внутри блока или снаружи.
-            if kind == LineKind.BLOCK_START:
-                if in_block:
-                    diags.append(self._make_diag(
-                        "E002", "Вложенные блоки запрещены",
-                        line_num, filename
-                    ))
+            before = len(diags)
+            names: list[str] = []
+            if kind in (LineKind.BLOCK, LineKind.NET):
+                names = tokens[1:]
+            elif kind == LineKind.PRIMITIVE:
+                names = tokens[1:]
+            elif kind == LineKind.PIN:
+                names = [tokens[1]] + ([] if tokens[2] == "-" else [tokens[2]])
+            elif kind == LineKind.INST:
+                names = [tokens[1], tokens[3]]
+                if tokens[2] not in ("sub", "prim"):
+                    error("E101", "вид инстанса должен быть sub или prim", number)
+            elif kind == LineKind.CONN:
+                parts = tokens[0].split(".")
+                if len(parts) != 2:
+                    error("E102", "подключение должно иметь вид INST.PIN", number)
                 else:
-                    in_block = True
-                    # Проверяем, что имя блока корректно (без ':').
-                    block_name = tokens[0][:-1]
-                    if not ID_RE.match(block_name):
-                        diags.append(self._make_diag(
-                            "E003", f"Некорректное имя блока: {block_name}",
-                            line_num, filename
-                        ))
-            elif not in_block:
-                diags.append(self._make_diag(
-                    "E004", "Строка вне блока",
-                    line_num, filename
-                ))
+                    names = parts
+                if tokens[1] != "-":
+                    names.append(tokens[1])
+            for name in names:
+                if name in KEYWORDS:
+                    error("E107", f"зарезервированное слово '{name}' вместо имени", number, name)
+                elif ID_RE.fullmatch(name) is None:
+                    error("E102", f"некорректный идентификатор '{name}'", number, name)
+            if len(diags) != before:
+                continue
 
-        # В конце проверяем, закрыт ли блок.
-        if in_block:
-            diags.append(self._make_diag(
-                "E005", "Незакрытый блок в конце файла",
-                len(lines), filename
-            ))
+            if kind == LineKind.BLOCK:
+                if current is not None:
+                    error("E105", "block внутри незакрытого блока", number, tokens[1])
+                else:
+                    current, opened_at = tokens[1], number
+            elif kind == LineKind.END:
+                if current is None:
+                    error("E106", "end без открытого блока", number)
+                else:
+                    current, opened_at = None, None
+            elif kind == LineKind.PRIMITIVE:
+                if current is not None:
+                    error("E109", "primitive внутри блока", number, tokens[1])
+            elif current is None:
+                error("E104", "строка блока вне блока", number)
 
+        if opened_at is not None:
+            # Парсер сохраняет объявление с E105 на открывающей строке.
+            error("E105", "блок не закрыт к концу файла", opened_at, current)
         return diags
 
-    def _check_identifiers(
-            self, tokens: list[str], kind: LineKind,
-            line_num: int, filename: str | None
-    ) -> list[Diagnostic]:
-        """
-        Проверяет корректность идентификаторов в токенах.
 
-        В зависимости от вида строки, проверяет определенные позиции.
-        """
-        errors = []
-        # Для "pin name net" проверяем name (индекс 1).
-        if kind == LineKind.PIN:
-            name = tokens[1]
-            if not ID_RE.match(name):
-                errors.append(self._make_diag(
-                    "E003", f"Некорректный идентификатор пина: {name}",
-                    line_num, filename
-                ))
-        # Для "inst.pin net" проверяем обе части.
-        elif kind == LineKind.CONNECTION:
-            parts = tokens[0].split(".")
-            if len(parts) == 2:
-                inst_name, pin_name = parts
-                if not ID_RE.match(inst_name) or not ID_RE.match(pin_name):
-                    errors.append(self._make_diag(
-                        "E003",
-                        f"Некорректный идентификатор подключения: {tokens[0]}",
-                        line_num, filename
-                    ))
-        return errors
-
-    def _make_diag(
-            self, code: str, message: str,
-            line_num: int, filename: str | None
-    ) -> Diagnostic:
-        """
-        Создает объект Diagnostic для синтаксической ошибки.
-
-        Примечание: точная структура Diagnostic требует согласования.
-        Здесь используется упрощенная версия.
-        """
-        # Заглушка: в реальном коде нужно импортировать Diagnostic
-        # и создать его с нужными полями (loc, severity и т.д.).
-        # Для компиляции без модели используем словарь.
-        return {
-            "code": code,
-            "message": message,
-            "loc": {"filename": filename, "line": line_num},
-            "check": NAME
-        }
-
-    def check(
-            self,
-            view: NetlistView,
-            opts: CheckOptions = None,
-            **kw
-    ) -> list[Diagnostic]:
-        """
-        Заглушка для совместимости с общим интерфейсом проверок.
-
-        Возвращает пустой список, так как синтаксические ошибки
-        уже были получены при разборе исходного текста.
-        """
-        return []
+def check(view: NetlistView, opts: CheckOptions | None = None, **kw
+          ) -> list[Diagnostic]:
+    """Синтаксические сообщения уже получены на этапе разбора текста."""
+    return []
