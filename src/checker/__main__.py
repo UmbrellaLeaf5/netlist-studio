@@ -1,4 +1,4 @@
-"""Запуск чекера командой ``python -m netlist.checker``."""
+"""Запуск чекера командой ``python -m src.checker``."""
 
 from .cli import main
 

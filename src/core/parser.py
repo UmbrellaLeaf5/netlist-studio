@@ -9,10 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from netlist.core.model import Diagnostic, Severity, SourceLoc
+from src.core.model import Diagnostic, Severity, SourceLoc
 
 if TYPE_CHECKING:
-    from netlist.checker.syntax_check import SyntaxCheck
+    from src.checker.syntax_check import SyntaxCheck
 
 
 @dataclass
@@ -86,7 +86,7 @@ class NetlistParser:
     """
 
     def __init__(self, syntax_check: SyntaxCheck | None = None) -> None:
-        from netlist.checker import syntax_check as syntax
+        from src.checker import syntax_check as syntax
 
         self._syntax = syntax
         self._check = syntax.SyntaxCheck() if syntax_check is None else syntax_check

@@ -1,4 +1,4 @@
-"""Запуск оболочки командой ``python -m netlist.shell``."""
+"""Запуск оболочки командой ``python -m src.shell``."""
 
 from .main_window import main
 

@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from netlist.core.model import Block, InstanceKind, ModelError, Net, Pin, Primitive, SourceLoc
+from src.core.model import Block, InstanceKind, ModelError, Net, Pin, Primitive, SourceLoc
 
 
 class DataEntityTests(unittest.TestCase):

@@ -6,19 +6,19 @@ from types import ModuleType
 from unittest.mock import Mock
 
 import pytest
-from PyQt5.QtCore import QObject, QSettings, pyqtSignal
-from PyQt5.QtWidgets import QMessageBox
+from PySide6.QtCore import QObject, QSettings, Signal
+from PySide6.QtWidgets import QMessageBox
 
-from netlist.core.model import Diagnostic, Severity, SourceLoc
-from netlist.core.parser import NetlistParser, ParseResult, RawNetlist
+from src.core.model import Diagnostic, Severity, SourceLoc
+from src.core.parser import NetlistParser, ParseResult, RawNetlist
 from tests.core.fakes import make_syntax_module, replaced_modules
 
 
 class AutosaveStub(QObject):
-    """Граница окна: регистрирует вызовы без таймера и Qt6."""
+    """Граница окна: регистрирует вызовы без таймера."""
 
-    saved = pyqtSignal(str)
-    failed = pyqtSignal(str)
+    saved = Signal(str)
+    failed = Signal(str)
 
     def __init__(self, manager, get_state, interval_ms, parent):
         super().__init__(parent)
@@ -32,13 +32,12 @@ class AutosaveStub(QObject):
 
 @pytest.fixture
 def window(qtbot, tmp_path, monkeypatch):
-    # Настоящий Autosave импортирует PySide6, а окно работает на PyQt5.
     # Подменяем только эту зависимость при загрузке тестируемого модуля.
-    autosave = ModuleType("netlist.editor.autosave")
+    autosave = ModuleType("src.editor.autosave")
     autosave.Autosave = AutosaveStub
     autosave.DocumentState = Mock()
     source = (
-        Path(__file__).resolve().parents[2] / "netlist/editor/main_window.py"
+        Path(__file__).resolve().parents[2] / "src/editor/main_window.py"
     )
     spec = importlib.util.spec_from_file_location(
         "_tested_editor_window", source
@@ -49,7 +48,7 @@ def window(qtbot, tmp_path, monkeypatch):
 
     # Синтаксис и иерархия принадлежат другим участникам.
     with replaced_modules(
-        {"netlist.checker.syntax_check": make_syntax_module()}
+        {"src.checker.syntax_check": make_syntax_module()}
     ):
         parser = NetlistParser()
     monkeypatch.setattr(module, "NetlistParser", lambda: parser)

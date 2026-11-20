@@ -18,9 +18,9 @@ from __future__ import annotations
 import operator
 import sys
 
-from netlist.core.entities import Block, Primitive, _rename, _unique
-from netlist.core.errors import ModelError
-from netlist.core.views import BlockView, NetlistView
+from src.core.entities import Block, Primitive, _rename, _unique
+from src.core.errors import ModelError
+from src.core.views import BlockView, NetlistView
 
 
 def _copy_block(source: BlockView, name: str) -> Block:

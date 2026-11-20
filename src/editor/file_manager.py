@@ -20,14 +20,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from netlist.core.model import Diagnostic, Severity, SourceLoc
+from src.core.model import Diagnostic, Severity, SourceLoc
 
 if TYPE_CHECKING:
     # Аннотации сохраняют согласованные имена, не создавая импортов ядра
     # во время запуска чекера или изолированного тестирования сервисов.
-    from netlist.core.model import Netlist
-    from netlist.core.parser import NetlistParser, ParseResult
-    from netlist.core.serializer import NetlistSerializer
+    from src.core.model import Netlist
+    from src.core.parser import NetlistParser, ParseResult
+    from src.core.serializer import NetlistSerializer
 
 
 class FileAccessError(OSError):

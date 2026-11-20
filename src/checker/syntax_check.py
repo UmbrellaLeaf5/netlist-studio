@@ -10,7 +10,7 @@ import re
 from enum import Enum, auto
 from typing import Sequence
 
-from netlist.core.model import CheckOptions, Diagnostic, NetlistView, Severity, SourceLoc
+from src.core.model import CheckOptions, Diagnostic, NetlistView, Severity, SourceLoc
 
 NAME = "syntax"
 CODES: dict[str, str] = {

@@ -8,12 +8,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from netlist.checker import hierarchy_check, model_utils, pin_check, subcircuit_check
-from netlist.checker.syntax_check import LineKind, SyntaxCheck, classify, tokenize
-from netlist.core.hierarchy import HierarchyWalker
-from netlist.core.model import CheckOptions, Diagnostic, Netlist, PinRef, Severity, SourceLoc
-from netlist.core.parser import NetlistParser
-from netlist.core.serializer import NetlistSerializer
+from src.checker import hierarchy_check, model_utils, pin_check, subcircuit_check
+from src.checker.syntax_check import LineKind, SyntaxCheck, classify, tokenize
+from src.core.hierarchy import HierarchyWalker
+from src.core.model import CheckOptions, Diagnostic, Netlist, PinRef, Severity, SourceLoc
+from src.core.parser import NetlistParser
+from src.core.serializer import NetlistSerializer
 
 
 class SyntaxTests(unittest.TestCase):

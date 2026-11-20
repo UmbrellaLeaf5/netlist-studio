@@ -1,4 +1,4 @@
-"""Юнит-тесты NetlistSerializer (netlist/core/serializer.py, автор Н. Бучилкин).
+"""Юнит-тесты NetlistSerializer (src/core/serializer.py, автор Н. Бучилкин).
 
 Контракт: docs/interfaces.md, п. 2.3. Сериализатор читает модель только
 через методы primitives(), blocks(), pins(), nets(), instances(), поэтому
@@ -19,8 +19,8 @@ from __future__ import annotations
 import unittest
 from contextlib import ExitStack
 
-from netlist.core.model import InstanceKind
-from netlist.core.serializer import NetlistSerializer
+from src.core.model import InstanceKind
+from src.core.serializer import NetlistSerializer
 from tests.core.fakes import (
     FakeBlock,
     FakeInstance,
@@ -304,11 +304,11 @@ class RoundTripTest(unittest.TestCase):
     def setUp(self) -> None:
         stack = ExitStack()
         stack.enter_context(replaced_modules(
-            {"netlist.checker.syntax_check": make_syntax_module()}))
+            {"src.checker.syntax_check": make_syntax_module()}))
         self.addCleanup(stack.close)
 
     def build_model(self):
-        from netlist.core.model import Netlist
+        from src.core.model import Netlist
 
         model = Netlist()
         model.add_primitive("r", ["a", "b"])
@@ -329,9 +329,9 @@ class RoundTripTest(unittest.TestCase):
         return model
 
     def restore(self, text: str):
-        from netlist.checker.checker_parser import CheckerDraft
-        from netlist.core.model import Netlist
-        from netlist.core.parser import NetlistParser
+        from src.checker.checker_parser import CheckerDraft
+        from src.core.model import Netlist
+        from src.core.parser import NetlistParser
 
         result = NetlistParser(StubSyntaxCheck()).parse(text, "round.net")
         self.assertTrue(result.ok)

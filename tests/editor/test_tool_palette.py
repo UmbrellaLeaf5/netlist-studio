@@ -2,8 +2,8 @@
 
 import pytest
 
-from netlist.editor.canvas import Tool
-from netlist.editor.tool_palette import ToolPalette
+from src.editor.canvas import Tool
+from src.editor.tool_palette import ToolPalette
 
 
 @pytest.fixture

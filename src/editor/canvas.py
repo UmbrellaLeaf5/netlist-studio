@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from netlist.core.model import (
+from src.core.model import (
     Diagnostic,
     ModelError,
     Netlist,
@@ -47,16 +47,16 @@ from netlist.core.model import (
     Severity,
     SourceLoc,
 )
-from netlist.core.parser import RawNetlist
-from netlist.editor.undo_stack import (
+from src.core.parser import RawNetlist
+from src.editor.undo_stack import (
     CanvasCommand,
     UndoStack,
     register_command,
 )
 
 if TYPE_CHECKING:
-    from netlist.editor.block_list import BlockList
-    from netlist.editor.tool_palette import ToolPalette
+    from src.editor.block_list import BlockList
+    from src.editor.tool_palette import ToolPalette
 
 CheckFn = Callable[[NetlistView], list[Diagnostic]]
 ItemId = tuple[str, ...]

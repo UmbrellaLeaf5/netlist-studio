@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from netlist.core.model import CheckOptions, Diagnostic, NetlistView, SourceLoc
+from src.core.model import CheckOptions, Diagnostic, NetlistView, SourceLoc
 
 
 @dataclass(frozen=True)
@@ -121,7 +121,7 @@ class HierarchyWalker:
         return order
 
     def validate(self, opts: CheckOptions | None = None) -> list[Diagnostic]:
-        from netlist.checker import cycle_check, hierarchy_check
+        from src.checker import cycle_check, hierarchy_check
 
         if opts is None:
             opts = CheckOptions()

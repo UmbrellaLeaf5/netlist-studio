@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-from netlist.core.model import Diagnostic, Netlist, PinRef, Severity, SourceLoc
-from netlist.core.parser import NetlistParser
-from netlist.editor.block_list import BlockList
-from netlist.editor.canvas import (
+from src.core.model import Diagnostic, Netlist, PinRef, Severity, SourceLoc
+from src.core.parser import NetlistParser
+from src.editor.block_list import BlockList
+from src.editor.canvas import (
     AddInstanceCommand,
     AddNetCommand,
     Canvas,
@@ -32,7 +32,7 @@ end
 
 def raw(text):
     with replaced_modules(
-        {"netlist.checker.syntax_check": make_syntax_module()}
+        {"src.checker.syntax_check": make_syntax_module()}
     ):
         result = NetlistParser().parse(text, filename="example.net")
     assert result.ok, result.diagnostics

@@ -28,19 +28,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from netlist.core.hierarchy import HierarchyWalker
-from netlist.core.model import (
+from src.core.hierarchy import HierarchyWalker
+from src.core.model import (
     CheckOptions,
     Diagnostic,
     Netlist,
     Severity,
     SourceLoc,
 )
-from netlist.core.parser import NetlistParser
-from netlist.core.serializer import NetlistSerializer
-from netlist.editor.autosave import Autosave, DocumentState
-from netlist.editor.block_list import BlockList
-from netlist.editor.canvas import (
+from src.core.parser import NetlistParser
+from src.core.serializer import NetlistSerializer
+from src.editor.autosave import Autosave, DocumentState
+from src.editor.block_list import BlockList
+from src.editor.canvas import (
     AddBlockCommand,
     AddInstanceCommand,
     Canvas,
@@ -51,15 +51,15 @@ from netlist.editor.canvas import (
     Tool,
     MoveBlockCommand,
 )
-from netlist.editor.file_manager import (
+from src.editor.file_manager import (
     FileAccessError,
     FileLockedError,
     FileManager,
     file_sha256,
     history_path,
 )
-from netlist.editor.tool_palette import ToolPalette
-from netlist.editor.undo_stack import UndoStack
+from src.editor.tool_palette import ToolPalette
+from src.editor.undo_stack import UndoStack
 
 AUTOSAVE_DEFAULT = 30_000
 
@@ -626,7 +626,7 @@ class EditorMainWindow(QMainWindow):
         for name in ("subcircuit_check", "pin_check", "net_check"):
             try:
                 module = importlib.import_module(
-                    f"netlist.checker.{name}"
+                    f"src.checker.{name}"
                 )
             except ImportError:
                 continue
@@ -911,7 +911,7 @@ class EditorMainWindow(QMainWindow):
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Точка входа ``python -m netlist.editor [FILE]``."""
+    """Точка входа ``python -m src.editor [FILE]``."""
 
     arguments = list(sys.argv[1:] if argv is None else argv)
     app = QApplication.instance() or QApplication(

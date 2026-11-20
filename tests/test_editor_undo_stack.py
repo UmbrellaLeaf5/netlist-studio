@@ -11,8 +11,8 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from netlist.editor import undo_stack as history
-from netlist.editor.file_manager import FileAccessError
+from src.editor import undo_stack as history
+from src.editor.file_manager import FileAccessError
 
 
 @dataclass
@@ -442,7 +442,7 @@ class UndoStackTest(unittest.TestCase):
     def test_save_reports_write_error_and_preserves_old_history_file(self):
         self.path.write_text("old history", encoding="utf-8")
         self.stack.push(Append("A"))
-        with patch("netlist.editor.file_manager.os.replace",
+        with patch("src.editor.file_manager.os.replace",
                    side_effect=PermissionError("denied")):
             with self.assertRaises(FileAccessError):
                 self.stack.save(str(self.path), self.sha)

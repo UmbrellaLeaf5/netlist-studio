@@ -11,13 +11,13 @@
 * netlist.py — коллекция определений, копирование и принятие состояния.
 
 Этот модуль оставлен как стабильная точка импорта: существующие модули
-могут продолжать писать `from netlist.core.model import Netlist`, не зная
+могут писать `from src.core.model import Netlist`, не зная
 внутреннего разбиения. Новую реализацию следует помещать в профильный
 модуль, а публичные имена экспортировать отсюда. Это позволяет читать
 каждый компонент отдельно и избежать обратных импортов между слоями.
 """
 
-from netlist.core.diagnostics import (
+from src.core.diagnostics import (
     CheckOptions,
     Diagnostic,
     InstanceKind,
@@ -25,10 +25,10 @@ from netlist.core.diagnostics import (
     Severity,
     SourceLoc,
 )
-from netlist.core.entities import Block, Instance, Net, Pin, Primitive
-from netlist.core.errors import ModelError
-from netlist.core.netlist import Netlist
-from netlist.core.views import (
+from src.core.entities import Block, Instance, Net, Pin, Primitive
+from src.core.errors import ModelError
+from src.core.netlist import Netlist
+from src.core.views import (
     BlockView,
     InstanceView,
     NetlistView,

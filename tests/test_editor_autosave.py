@@ -14,9 +14,9 @@ from tempfile import TemporaryDirectory
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-from netlist.core.model import Netlist
-from netlist.editor import file_manager
-from netlist.editor.undo_stack import UndoStack
+from src.core.model import Netlist
+from src.editor import file_manager
+from src.editor.undo_stack import UndoStack
 
 
 HAS_QT = find_spec("PySide6") is not None
@@ -93,7 +93,7 @@ def load_without_qt():
         TimerOwner, ManualTimer, TestSignal,
     )
     path = Path(file_manager.__file__).with_name("autosave.py")
-    spec = spec_from_file_location("netlist.editor._autosave_unit_tests", path)
+    spec = spec_from_file_location("src.editor._autosave_unit_tests", path)
     module = module_from_spec(spec)
     with patch.dict(sys.modules, {
         "PySide6": qt, "PySide6.QtCore": qtcore, spec.name: module,
@@ -105,7 +105,7 @@ def load_without_qt():
 if HAS_QT:
     from PySide6.QtCore import QCoreApplication, QEvent, QObject
     from shiboken6 import isValid
-    from netlist.editor import autosave
+    from src.editor import autosave
 else:
     autosave = load_without_qt()
     QObject = TimerOwner

@@ -16,9 +16,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from netlist.core.model import Diagnostic, Netlist, Severity, SourceLoc
-from netlist.core.parser import ParseResult, RawNetlist
-from netlist.editor import file_manager as fm
+from src.core.model import Diagnostic, Netlist, Severity, SourceLoc
+from src.core.parser import ParseResult, RawNetlist
+from src.editor import file_manager as fm
 
 
 NETLIST = "block main\nend\n"

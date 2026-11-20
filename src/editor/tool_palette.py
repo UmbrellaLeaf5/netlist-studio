@@ -13,7 +13,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import QToolBar, QWidget
 
-from netlist.editor.canvas import Tool
+from src.editor.canvas import Tool
 
 
 class ToolPalette(QToolBar):

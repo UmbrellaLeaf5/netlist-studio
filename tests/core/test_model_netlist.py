@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import unittest
 
-from netlist.core.model import (
+from src.core.model import (
     Block, InstanceKind, ModelError, Netlist, SourceLoc,
 )
 from tests.core.fakes import (

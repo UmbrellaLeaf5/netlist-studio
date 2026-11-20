@@ -1,6 +1,6 @@
 """CheckerParser: черновик нетлиста для чекера.
 
-Модуль чекера проекта «Нетлист»: `netlist/checker/checker_parser.py`.
+Модуль чекера проекта «Нетлист»: `src/checker/checker_parser.py`.
 Автор: М. Шифрин. Интерфейс согласовать с Н. Бучилкиным (NetlistParser),
 см. interfaces.md, п. 4.2 и п. 2.2.
 
@@ -37,12 +37,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
-from netlist.core.model import Diagnostic, PinRef, SourceLoc
+from src.core.model import Diagnostic, PinRef, SourceLoc
 
 if TYPE_CHECKING:
     # Сырые данные нужны только для аннотаций. NetlistParser во время
     # выполнения импортируется внутри load(), см. комментарий там.
-    from netlist.core.parser import (
+    from src.core.parser import (
         RawBlock,
         RawConnection,
         RawNetlist,
@@ -200,7 +200,7 @@ def load(text: str, filename: str | None = None,
     """
     # Импорт здесь, а не наверху: CheckerDraft нужен и без парсера
     # (например, в тестах проверок), а парсер тянет за собой SyntaxCheck.
-    from netlist.core.parser import NetlistParser
+    from src.core.parser import NetlistParser
 
     parser = NetlistParser()
     parsed = parser.parse(text, filename)
