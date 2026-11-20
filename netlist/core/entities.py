@@ -173,6 +173,16 @@ class Instance(_Pins):
         self.loc = _UNKNOWN
         self.set_type(kind, type_name)
 
+    def __eq__(self, other: object) -> bool:
+        """Сравнить данные и порядок пинов, не сравнивая содержащий блок."""
+        if not isinstance(other, Instance) or type(self) is not type(other):
+            return NotImplemented
+        return (self.name == other.name
+                and self.kind == other.kind
+                and self.type_name == other.type_name
+                and self.loc == other.loc
+                and self.pins() == other.pins())
+
     def set_type(self, kind: str | InstanceKind, type_name: str) -> None:
         """Изменить тип, сохранив пины для последующей проверки чекером.
 
@@ -201,6 +211,16 @@ class Block(_Pins):
         self.loc = _UNKNOWN
         self._nets: dict[str, Net] = {}
         self._instances: dict[str, Instance] = {}
+
+    def __eq__(self, other: object) -> bool:
+        """Сравнить определение с учётом порядка пинов, цепей и инстансов."""
+        if not isinstance(other, Block) or type(self) is not type(other):
+            return NotImplemented
+        return (self.name == other.name
+                and self.loc == other.loc
+                and self.pins() == other.pins()
+                and self.nets() == other.nets()
+                and self.instances() == other.instances())
 
     def nets(self) -> list[NetView]:
         """Получить объявления цепей в порядке создания."""

@@ -15,6 +15,9 @@ Netlist не занимается вводом-выводом или семан�
 
 from __future__ import annotations
 
+import operator
+import sys
+
 from netlist.core.entities import Block, Primitive, _rename, _unique
 from netlist.core.errors import ModelError
 from netlist.core.views import BlockView, NetlistView
@@ -63,6 +66,14 @@ class Netlist:
         self.source_file: str | None = None
         self._blocks: dict[str, Block] = {}
         self._primitives: dict[str, Primitive] = {}
+
+    def __eq__(self, other: object) -> bool:
+        """Сравнить источник и определения в порядке документа."""
+        if not isinstance(other, Netlist) or type(self) is not type(other):
+            return NotImplemented
+        return (self.source_file == other.source_file
+                and self.primitives() == other.primitives()
+                and self.blocks() == other.blocks())
 
     @classmethod
     def from_view(cls, view: NetlistView) -> Netlist:
@@ -151,9 +162,16 @@ class Netlist:
         del self._primitives[name]
 
     def _insert(self, block: Block, index: int | None) -> None:
-        """Вставить блок; индекс использует правила стандартного list.insert."""
+        """Вставить по правилам list.insert; добавление в конец — O(1) амортизированно."""
+        if index is None:
+            self._blocks[block.name] = block
+            return
+        position = operator.index(index)
+        # list.insert не принимает индексы за пределами Py_ssize_t.
+        if len(self._blocks) <= position <= sys.maxsize:
+            self._blocks[block.name] = block
+            return
         items = list(self._blocks.items())
-        position = len(items) if index is None else index
         items.insert(position, (block.name, block))
         self._blocks = dict(items)
 
