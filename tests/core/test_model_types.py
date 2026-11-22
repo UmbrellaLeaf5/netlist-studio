@@ -3,7 +3,7 @@
 from dataclasses import FrozenInstanceError
 import unittest
 
-from netlist.core.model import (
+from src.core.model import (
     CheckOptions, Diagnostic, InstanceKind, ModelError, PinRef, Severity,
     SourceLoc,
 )

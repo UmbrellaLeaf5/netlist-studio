@@ -6,8 +6,8 @@ from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-from netlist.checker import cli
-from netlist.core.model import CheckOptions, Diagnostic, Severity, SourceLoc
+from src.checker import cli
+from src.core.model import CheckOptions, Diagnostic, Severity, SourceLoc
 
 
 def diag(code, line, file="design"):

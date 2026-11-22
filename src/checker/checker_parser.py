@@ -1,6 +1,6 @@
 """CheckerParser: черновик нетлиста для чекера.
 
-Модуль чекера проекта «Нетлист»: `netlist/checker/checker_parser.py`.
+Модуль чекера проекта «Нетлист»: `src/checker/checker_parser.py`.
 Автор: М. Шифрин. Интерфейс согласовать с Н. Бучилкиным (NetlistParser),
 см. interfaces.md, п. 4.2 и п. 2.2.
 
@@ -37,12 +37,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
-from netlist.core.model import Diagnostic, PinRef, SourceLoc
+from src.core.model import Diagnostic, PinRef, SourceLoc
 
 if TYPE_CHECKING:
     # Сырые данные нужны только для аннотаций. NetlistParser во время
     # выполнения импортируется внутри load(), см. комментарий там.
-    from netlist.core.parser import (
+    from src.core.parser import (
         RawBlock,
         RawConnection,
         RawNetlist,
@@ -57,8 +57,17 @@ if TYPE_CHECKING:
 class DraftPrimitive:
     """Строка `primitive NAME PIN...` (из файла или из библиотеки)."""
     name: str
-    pin_names: list[str]
+    _pin_names: tuple[str, ...]
     loc: SourceLoc
+
+    def __init__(self, name: str, pin_names: list[str], loc: SourceLoc) -> None:
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "_pin_names", tuple(pin_names))
+        object.__setattr__(self, "loc", loc)
+
+    @property
+    def pin_names(self) -> list[str]:
+        return list(self._pin_names)
 
 
 @dataclass(frozen=True)
@@ -191,7 +200,7 @@ def load(text: str, filename: str | None = None,
     """
     # Импорт здесь, а не наверху: CheckerDraft нужен и без парсера
     # (например, в тестах проверок), а парсер тянет за собой SyntaxCheck.
-    from netlist.core.parser import NetlistParser
+    from src.core.parser import NetlistParser
 
     parser = NetlistParser()
     parsed = parser.parse(text, filename)
@@ -206,7 +215,7 @@ def load(text: str, filename: str | None = None,
 
 # Построение объектов черновика из сырых данных
 def _primitive(raw: RawPrimitive) -> DraftPrimitive:
-    return DraftPrimitive(raw.name, list(raw.pin_names), raw.loc)
+    return DraftPrimitive(raw.name, raw.pin_names, raw.loc)
 
 
 def _block(raw: RawBlock) -> DraftBlock:

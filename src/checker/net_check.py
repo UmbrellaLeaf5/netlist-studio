@@ -1,6 +1,6 @@
 """NetCheck: ошибки цепей.
 
-Модуль чекера проекта «Нетлист»: `netlist/checker/net_check.py`.
+Модуль чекера проекта «Нетлист»: `src/checker/net_check.py`.
 Автор: М. Шифрин. Интерфейс согласовать с Н. Чиркиным (ModelUtils),
 см. interfaces.md, п. 4.8 и раздел 7.
 
@@ -73,8 +73,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from netlist.checker.model_utils import ModelIndex
-from netlist.core.model import (
+from src.checker.model_utils import ModelIndex
+from src.core.model import (
     CheckOptions,
     Diagnostic,
     PinRef,
@@ -86,7 +86,7 @@ if TYPE_CHECKING:
     # Протоколы нужны только для аннотаций.
     from collections.abc import Iterator
 
-    from netlist.core.model import BlockView, InstanceView, NetlistView
+    from src.core.model import BlockView, InstanceView, NetlistView
 
 
 # Имя проверки: поле Diagnostic.check и ключ для --checks у CheckerCLI.

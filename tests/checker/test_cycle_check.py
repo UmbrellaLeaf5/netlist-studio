@@ -13,9 +13,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from netlist.checker import cycle_check
-from netlist.core.hierarchy import HierEdge
-from netlist.core.model import CheckOptions, Diagnostic, Severity
+from src.checker import cycle_check
+from src.core.hierarchy import HierEdge
+from src.core.model import CheckOptions, Diagnostic, Severity
 from tests.core.fakes import FakeBlock, FakeInstance, FakeView, loc
 
 
@@ -76,7 +76,7 @@ class CheckTest(unittest.TestCase):
                 walker.reset_mock()
                 with (
                     mock.patch(
-                        "netlist.core.hierarchy.HierarchyWalker", return_value=walker
+                        "src.core.hierarchy.HierarchyWalker", return_value=walker
                     ) as make_walker,
                     mock.patch.object(
                         cycle_check, "ModelIndex", return_value=index

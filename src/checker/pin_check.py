@@ -1,6 +1,6 @@
 """PinCheck: неподключённые и многократно подключённые пины.
 
-Модуль чекера проекта «Нетлист»: `netlist/checker/pin_check.py`.
+Модуль чекера проекта «Нетлист»: `src/checker/pin_check.py`.
 Автор: Л. Сальникова. Интерфейс согласовать с М. Шифриным (CheckerCLI)
 и Н. Чиркиным (ModelUtils), см. docs/interfaces.md, п. 4.7 и раздел 7.
 
@@ -47,12 +47,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from netlist.checker.model_utils import ModelIndex, resolve_type
-from netlist.core.model import CheckOptions, Diagnostic, Severity, SourceLoc
+from src.checker.model_utils import ModelIndex, resolve_type
+from src.core.model import CheckOptions, Diagnostic, Severity, SourceLoc
 
 if TYPE_CHECKING:
     # Протоколы нужны только для аннотаций.
-    from netlist.core.model import (
+    from src.core.model import (
         BlockView,
         InstanceView,
         NetlistView,

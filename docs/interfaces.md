@@ -17,14 +17,13 @@
 
 ## 0. Общие соглашения
 
-**Язык и версии.** Python 3.11+, аннотации типов обязательны в публичных функциях. GUI на Qt.
-Пока не выбрано между PySide6 и PyQt6, сигналы в документе записаны как `Signal(...)`
-(в PyQt6 это `pyqtSignal`). Тесты: `pytest` для логики, `pytest-qt` для интерфейса.
+**Язык и версии.** Python 3.11+, аннотации типов обязательны в публичных функциях. GUI редактора и оболочки на Qt 6 (PySide6).
+Сигналы объявляются через `Signal(...)`. Тесты: `pytest` для логики, `pytest-qt` для интерфейса.
 
 **Структура пакетов.** Разбиение на файлы соответствует архитектуре и ответственности модулей:
 
 ```
-netlist/
+src/
   core/      model.py  diagnostics.py  errors.py  views.py  entities.py
              netlist.py  parser.py  serializer.py  hierarchy.py                 # ядро редактора
   editor/    main_window.py  canvas.py  block_list.py  tool_palette.py
@@ -35,7 +34,7 @@ netlist/
   shell/     main_window.py  checker_dialog.py  settings.py  process_runner.py
 ```
 
-Запуск: `python -m netlist.shell`, `python -m netlist.editor`, `python -m netlist.checker`.
+Запуск: `python -m src.shell`, `python -m src.editor`, `python -m src.checker`.
 
 **Зависимости по коду (только стрелки финальной архитектуры):**
 
@@ -245,7 +244,7 @@ end
 
 ## 2. Ядро редактора
 
-### 2.1. NetlistModel — `netlist/core/model.py`
+### 2.1. NetlistModel — `src/core/model.py`
 
 Автор: **Д. Криворучко**. Согласовано: Н. Бучилкин, А. Пронин, Н. Акрамов, а также
 М. Шифрин, Н. Чиркин, Л. Сальникова, М. Большаков (они пользуются `NetlistView`, `Diagnostic`,
@@ -255,7 +254,7 @@ end
 разделена по ответственности: `diagnostics.py` содержит общие типы сообщений и настроек,
 `views.py` — протоколы чтения, `entities.py` — блоки, экземпляры, пины, цепи и примитивы,
 `errors.py` — `ModelError`, а `netlist.py` — контейнер определений и принятие черновиков.
-Старые импорты из `netlist.core.model` сохраняются. Интерфейс, парсер и сериализатор в модели
+Публичные типы доступны из `src.core.model`. Интерфейс, парсер и сериализатор в модели
 не используются.
 
 #### Общие типы
@@ -457,7 +456,7 @@ class Instance:
 
 ---
 
-### 2.2. NetlistParser — `netlist/core/parser.py`
+### 2.2. NetlistParser — `src/core/parser.py`
 
 Автор: **Н. Бучилкин**. Согласовано: Н. Акрамов (FileManager), М. Шифрин (CheckerParser),
 Н. Чиркин (SyntaxCheck).
@@ -525,7 +524,7 @@ class NetlistParser:
 
 ---
 
-### 2.3. NetlistSerializer — `netlist/core/serializer.py`
+### 2.3. NetlistSerializer — `src/core/serializer.py`
 
 Автор: **Н. Бучилкин**. Согласовано: Н. Акрамов (FileManager), Л. Сальникова (формат).
 
@@ -549,7 +548,7 @@ class NetlistSerializer:
 
 ---
 
-### 2.4. HierarchyWalker — `netlist/core/hierarchy.py`
+### 2.4. HierarchyWalker — `src/core/hierarchy.py`
 
 Автор: **Н. Бучилкин**. Согласовано: А. Пронин (редактор), Н. Чиркин (HierarchyCheck),
 М. Большаков (CycleCheck).
@@ -605,7 +604,7 @@ class HierarchyWalker:
 
 ## 3. Редактор
 
-### 3.1. FileManager — `netlist/editor/file_manager.py`
+### 3.1. FileManager — `src/editor/file_manager.py`
 
 Автор: **Н. Акрамов**. Согласовано: А. Пронин (EditorMainWindow, Canvas), М. Шифрин (CheckerCLI).
 
@@ -709,7 +708,7 @@ class FileManager:
 
 ---
 
-### 3.2. UndoStack — `netlist/editor/undo_stack.py`
+### 3.2. UndoStack — `src/editor/undo_stack.py`
 
 Автор: **Н. Акрамов**. Согласовано: А. Пронин (Canvas, EditorMainWindow).
 
@@ -782,7 +781,7 @@ class UndoStack:
 
 ---
 
-### 3.3. Autosave — `netlist/editor/autosave.py`
+### 3.3. Autosave — `src/editor/autosave.py`
 
 Автор: **Н. Акрамов**. Согласовано: А. Пронин (EditorMainWindow).
 
@@ -825,7 +824,7 @@ class Autosave(QObject):
 
 ---
 
-### 3.4. Canvas — `netlist/editor/canvas.py`
+### 3.4. Canvas — `src/editor/canvas.py`
 
 Автор: **А. Пронин**. Согласовано: Н. Акрамов (UndoStack, Autosave), Д. Криворучко (NetlistModel),
 Н. Бучилкин (RawNetlist, HierarchyWalker).
@@ -966,7 +965,7 @@ class Canvas(QGraphicsView):
 
 ---
 
-### 3.5. BlockList — `netlist/editor/block_list.py`
+### 3.5. BlockList — `src/editor/block_list.py`
 
 Автор: **А. Пронин**. Согласовано: внутри редактора (Canvas, EditorMainWindow).
 
@@ -998,7 +997,7 @@ BlockList черновик не меняет: он только испускае
 
 ---
 
-### 3.6. ToolPalette — `netlist/editor/tool_palette.py`
+### 3.6. ToolPalette — `src/editor/tool_palette.py`
 
 Автор: **А. Пронин**. Согласовано: внутри редактора.
 
@@ -1026,7 +1025,7 @@ Canvas подписан на `undoRequested`, `redoRequested` и `toolChanged`. 
 
 ---
 
-### 3.7. EditorMainWindow — `netlist/editor/main_window.py`
+### 3.7. EditorMainWindow — `src/editor/main_window.py`
 
 Автор: **А. Пронин**. Согласовано: К. Транович (запуск из оболочки), Н. Акрамов.
 
@@ -1048,7 +1047,7 @@ class EditorMainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None
 ```
 
-- `main(argv)` — точка входа `python -m netlist.editor [FILE]`. Если `FILE` передан, сразу
+- `main(argv)` — точка входа `python -m src.editor [FILE]`. Если `FILE` передан, сразу
   вызывается `open_document`. Возвращает код выхода Qt-приложения.
 - `new_document()` вызывает `fm.new()`, `canvas.new_document()`, `undo_stack.clear()`,
   `autosave.disable()`.
@@ -1095,7 +1094,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(), **kw) -> list[
 
 ---
 
-### 4.1. ModelUtils — `netlist/checker/model_utils.py`
+### 4.1. ModelUtils — `src/checker/model_utils.py`
 
 Автор: **Н. Чиркин**. Согласовано: М. Шифрин, Л. Сальникова, М. Большаков.
 
@@ -1153,7 +1152,7 @@ class ModelIndex:
 
 ---
 
-### 4.2. CheckerParser — `netlist/checker/checker_parser.py`
+### 4.2. CheckerParser — `src/checker/checker_parser.py`
 
 Автор: **М. Шифрин**. Согласовано: Н. Бучилкин (NetlistParser), М. Шифрин (CheckerCLI).
 
@@ -1181,7 +1180,7 @@ def load(text: str, filename: str | None = None,
 
 ---
 
-### 4.3. SyntaxCheck — `netlist/checker/syntax_check.py`
+### 4.3. SyntaxCheck — `src/checker/syntax_check.py`
 
 Автор: **Н. Чиркин**. Согласовано: Н. Бучилкин (NetlistParser), М. Шифрин (CheckerCLI), Л. Сальникова (формат).
 
@@ -1217,7 +1216,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(), **kw) -> list[
 
 ---
 
-### 4.4. HierarchyCheck — `netlist/checker/hierarchy_check.py`
+### 4.4. HierarchyCheck — `src/checker/hierarchy_check.py`
 
 Автор: **Н. Чиркин**. Согласовано: М. Шифрин, Н. Бучилкин (HierarchyWalker).
 
@@ -1233,7 +1232,7 @@ E204 (нет `opts.top`), E205 (дубликат примитива), W206 (бл
 `walker.missing()` и `walker.reachable(opts.top)`. Если `walker` не передан, создаёт
 `HierarchyWalker(view)`, импортируя его внутри функции.
 
-### 4.5. CycleCheck — `netlist/checker/cycle_check.py`
+### 4.5. CycleCheck — `src/checker/cycle_check.py`
 
 Автор: **М. Большаков**. Согласовано: М. Шифрин, Н. Бучилкин (HierarchyWalker).
 
@@ -1248,7 +1247,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
 на строку `inst`, которая замыкает цикл. Цикл через несуществующий блок невозможен:
 такие рёбра в граф walker'а не попадают.
 
-### 4.6. SubcircuitCheck — `netlist/checker/subcircuit_check.py`
+### 4.6. SubcircuitCheck — `src/checker/subcircuit_check.py`
 
 Автор: **Л. Сальникова**. Согласовано: М. Шифрин (CheckerCLI), Н. Чиркин (ModelUtils).
 
@@ -1274,7 +1273,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
 O(суммарного числа пинов инстансов) при множествах имён пинов, которые строятся один раз на
 каждое определение.
 
-### 4.7. PinCheck — `netlist/checker/pin_check.py`
+### 4.7. PinCheck — `src/checker/pin_check.py`
 
 Автор: **Л. Сальникова**. Согласовано: М. Шифрин, Н. Чиркин.
 
@@ -1293,7 +1292,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
   инстансе этот пин явно `-`. Выдаётся на строке инстанса: внутренняя цепь
   блока в этом экземпляре висит в воздухе.
 
-### 4.8. NetCheck — `netlist/checker/net_check.py`
+### 4.8. NetCheck — `src/checker/net_check.py`
 
 Автор: **М. Шифрин**. Согласовано: Н. Чиркин (ModelUtils).
 
@@ -1314,7 +1313,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
   по определениям за один проход по рёбрам иерархии, без раскрытия. В отчёте указывается
   блок, цепь и путь экземпляра.
 
-### 4.9. CheckerCLI — `netlist/checker/cli.py`
+### 4.9. CheckerCLI — `src/checker/cli.py`
 
 Автор: **М. Шифрин**. Согласовано: К. Транович (CheckerDialog, ProcessRunner), Н. Акрамов
 (FileManager), все авторы проверок.
@@ -1351,7 +1350,7 @@ def main(argv: list[str] | None = None) -> int     # sys.exit(main())
 
 ## 5. Оболочка
 
-### 5.1. Settings — `netlist/shell/settings.py`
+### 5.1. Settings — `src/shell/settings.py`
 
 Автор: **К. Транович**. Согласовано: К. Транович (CheckerDialog, ProcessRunner).
 
@@ -1384,11 +1383,11 @@ class Settings:
 ```
 
 - `editor_command()` и `checker_command()` возвращают префикс команды запуска. По умолчанию
-  `[sys.executable, "-m", "netlist.editor"]` и `[sys.executable, "-m", "netlist.checker"]`.
+  `[sys.executable, "-m", "src.editor"]` и `[sys.executable, "-m", "src.checker"]`.
   Их можно переопределить ключами `paths/editor` и `paths/checker`, например для собранного exe.
 - Конструктор принимает `QSettings`, чтобы в тестах подставлять временный ini-файл.
 
-### 5.2. ProcessRunner — `netlist/shell/process_runner.py`
+### 5.2. ProcessRunner — `src/shell/process_runner.py`
 
 Автор: **К. Транович**. Согласовано: К. Транович, А. Пронин (аргументы редактора), М. Шифрин (аргументы чекера).
 
@@ -1418,7 +1417,7 @@ class ProcessRunner(QObject):
   и stderr. Вывод построчно испускается в `checkerOutput`. Пока чекер работает, повторный
   запуск возвращает `False`.
 
-### 5.3. CheckerDialog — `netlist/shell/checker_dialog.py`
+### 5.3. CheckerDialog — `src/shell/checker_dialog.py`
 
 Автор: **К. Транович**. Согласовано: М. Шифрин (параметры CLI).
 
@@ -1447,7 +1446,7 @@ def build_args(state: CheckerDialogState) -> list[str]
   сохраняются между запусками оболочки.
 - `show_exit_code` показывает итог: 0 — «ошибок нет», 1 — «найдены ошибки», 2 и 3 — «ошибка запуска».
 
-### 5.4. MainWindow — `netlist/shell/main_window.py`
+### 5.4. MainWindow — `src/shell/main_window.py`
 
 Автор: **К. Транович**. Согласовано: —.
 
@@ -1531,7 +1530,7 @@ class MainWindow(QMainWindow):
 ### 6.3. CLI чекера
 
 ```
-python -m netlist.checker FILE [опции]
+python -m src.checker FILE [опции]
 
   FILE                        входной файл нетлиста
   -c, --checks LIST           список проверок через запятую:
@@ -1610,7 +1609,7 @@ design.net:41: warning W604 [net] цепь 'n9' блока 'block1' подклю
 
 ## 8. Сквозной сценарий в вызовах интерфейсов
 
-1. **Оболочка → редактор.** `MainWindow` → `ProcessRunner.run_editor()` → процесс `python -m netlist.editor`.
+1. **Оболочка → редактор.** `MainWindow` → `ProcessRunner.run_editor()` → процесс `python -m src.editor`.
 2. **Загрузка.** `EditorMainWindow.open_document(p)` → `FileManager.open(p)` → `NetlistParser.parse`
    → `SyntaxCheck.check_lines` → `Canvas.load_draft(raw, sch)` → `Canvas.commit()` →
    `validator` = `HierarchyWalker(draft).validate()` → `HierarchyCheck.check` + `CycleCheck.check`

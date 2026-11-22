@@ -17,7 +17,7 @@ from .file_manager import FileManager, history_path
 from .undo_stack import UndoStack
 
 if TYPE_CHECKING:
-    from netlist.core.model import Netlist
+    from src.core.model import Netlist
 
 
 @dataclass

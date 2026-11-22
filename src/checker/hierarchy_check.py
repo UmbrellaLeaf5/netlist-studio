@@ -8,13 +8,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from netlist.checker.model_utils import ModelIndex
-from netlist.core.model import CheckOptions, Diagnostic, NetlistView, Severity, SourceLoc
+from src.checker.model_utils import ModelIndex
+from src.core.model import CheckOptions, Diagnostic, NetlistView, Severity, SourceLoc
 
 if TYPE_CHECKING:
-    from netlist.core.hierarchy import HierarchyWalker
+    from src.core.hierarchy import HierarchyWalker
 
 NAME = "hierarchy"
+CODES: dict[str, str] = {
+    "E201": "неизвестный блок",
+    "E202": "неизвестный примитив",
+    "W202": "неизвестный примитив (предупреждение)",
+    "E203": "повторное определение блока",
+    "E204": "корневой блок не найден",
+    "E205": "повторное определение примитива",
+    "W206": "недостижимый блок",
+}
 
 
 def check(view: NetlistView, opts: CheckOptions | None = None,
@@ -25,7 +34,7 @@ def check(view: NetlistView, opts: CheckOptions | None = None,
     if index is None:
         index = ModelIndex(view)
     if walker is None:
-        from netlist.core.hierarchy import HierarchyWalker
+        from src.core.hierarchy import HierarchyWalker
 
         walker = HierarchyWalker(view)
     diags: list[Diagnostic] = []

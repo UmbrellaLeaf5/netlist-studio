@@ -3,9 +3,9 @@
 import json
 
 import pytest
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
-from netlist.editor.block_list import ELEMENT_MIME, BlockList
+from src.editor.block_list import ELEMENT_MIME, BlockList
 
 
 @pytest.fixture

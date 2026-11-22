@@ -1,6 +1,6 @@
 """Детерминированная сериализация принятой модели. Автор: Н. Бучилкин."""
 
-from netlist.core.model import Block, Netlist
+from src.core.model import Block, Netlist
 
 
 class NetlistSerializer:

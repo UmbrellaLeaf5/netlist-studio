@@ -6,8 +6,8 @@ import weakref
 from types import SimpleNamespace as Row
 from unittest.mock import Mock, patch
 
-from netlist.checker import net_check as nc
-from netlist.core.model import CheckOptions, PinRef, Severity, SourceLoc
+from src.checker import net_check as nc
+from src.core.model import CheckOptions, PinRef, Severity, SourceLoc
 
 
 def loc(line):

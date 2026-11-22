@@ -182,7 +182,7 @@ class Settings:
     def editor_command(self) -> list[str]:
         """Вернуть новый список программы и начальных аргументов редактора.
 
-        По умолчанию это [sys.executable, "-m", "netlist.editor"].
+        По умолчанию это [sys.executable, "-m", "src.editor"].
         Файл документа добавляет ProcessRunner. Ошибочная настройка
         paths/editor вызывает ValueError, но программа не запускается.
         """
@@ -191,7 +191,7 @@ class Settings:
     def checker_command(self) -> list[str]:
         """Вернуть новый список программы и начальных аргументов чекера.
 
-        По умолчанию это [sys.executable, "-m", "netlist.checker"].
+        По умолчанию это [sys.executable, "-m", "src.checker"].
         Файл и параметры проверки добавляет ProcessRunner. Ошибочная
         настройка paths/checker вызывает ValueError.
         """
@@ -220,7 +220,7 @@ class Settings:
         """
         value = self.get(f"paths/{name}")
         if value is None:
-            return [sys.executable, "-m", f"netlist.{name}"]
+            return [sys.executable, "-m", f"src.{name}"]
         # INI может вернуть список из одного аргумента как строку.
         # Считаем её одним путём, а не строкой для shell-разбора.
         if isinstance(value, str):

@@ -1,6 +1,4 @@
-from icecream import ic
-
-ic.disable()
+from src.shell.main_window import main
 
 if __name__ == "__main__":
-    ic()
+    raise SystemExit(main())

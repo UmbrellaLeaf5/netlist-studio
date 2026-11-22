@@ -12,7 +12,7 @@
 
 from typing import Protocol
 
-from netlist.core.diagnostics import InstanceKind, PinRef, SourceLoc
+from src.core.diagnostics import InstanceKind, PinRef, SourceLoc
 
 
 class PrimitiveView(Protocol):

@@ -2,9 +2,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from netlist.checker import hierarchy_check
-from netlist.core.hierarchy import HierEdge
-from netlist.core.model import CheckOptions, Severity, SourceLoc
+from src.checker import hierarchy_check
+from src.core.hierarchy import HierEdge
+from src.core.model import CheckOptions, Severity, SourceLoc
 from tests.core.fakes import FakeBlock, FakeInstance, FakePrimitive, FakeView, loc
 
 

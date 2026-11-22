@@ -1,6 +1,6 @@
 """CycleCheck: циклы в иерархии блоков.
 
-Модуль чекера проекта «Нетлист»: `netlist/checker/cycle_check.py`.
+Модуль чекера проекта «Нетлист»: `src/checker/cycle_check.py`.
 Автор: М. Большаков. Интерфейс согласовать с М. Шифриным (CheckerCLI)
 и Н. Бучилкиным (HierarchyWalker), см. interfaces.md, п. 4.5 и раздел 7.
 
@@ -66,14 +66,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from netlist.checker.model_utils import ModelIndex
-from netlist.core.model import CheckOptions, Diagnostic, Severity
+from src.checker.model_utils import ModelIndex
+from src.core.model import CheckOptions, Diagnostic, Severity
 
 if TYPE_CHECKING:
     # Типы нужны только для аннотаций. HierarchyWalker во время
     # выполнения импортируется внутри check(), см. комментарий там.
-    from netlist.core.hierarchy import HierarchyWalker, HierEdge
-    from netlist.core.model import NetlistView
+    from src.core.hierarchy import HierarchyWalker, HierEdge
+    from src.core.model import NetlistView
 
     # Блок -> (порядковый номер первого посещения, ребро, по которому
     # в него пришли; None для корня).
@@ -111,7 +111,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
     if walker is None:
         # Импорт здесь, а не наверху: core.hierarchy импортирует эту
         # проверку в validate(), и так нет цикла импорта (раздел 0).
-        from netlist.core.hierarchy import HierarchyWalker
+        from src.core.hierarchy import HierarchyWalker
         walker = HierarchyWalker(view)
     if index is None:
         index = ModelIndex(view)

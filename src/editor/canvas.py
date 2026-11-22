@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Callable, Iterable
 
-from PyQt5.QtCore import QPointF, QRectF, Qt, pyqtSignal as Signal
-from PyQt5.QtGui import (
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import (
     QColor,
     QFont,
     QPainter,
@@ -25,7 +25,7 @@ from PyQt5.QtGui import (
     QPainterPathStroker,
     QPen,
 )
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QGraphicsItem,
     QGraphicsObject,
     QGraphicsPathItem,
@@ -38,7 +38,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from netlist.core.model import (
+from src.core.model import (
     Diagnostic,
     ModelError,
     Netlist,
@@ -47,16 +47,16 @@ from netlist.core.model import (
     Severity,
     SourceLoc,
 )
-from netlist.core.parser import RawNetlist
-from netlist.editor.undo_stack import (
+from src.core.parser import RawNetlist
+from src.editor.undo_stack import (
     CanvasCommand,
     UndoStack,
     register_command,
 )
 
 if TYPE_CHECKING:
-    from netlist.editor.block_list import BlockList
-    from netlist.editor.tool_palette import ToolPalette
+    from src.editor.block_list import BlockList
+    from src.editor.tool_palette import ToolPalette
 
 CheckFn = Callable[[NetlistView], list[Diagnostic]]
 ItemId = tuple[str, ...]
@@ -2303,12 +2303,13 @@ class Canvas(QGraphicsView):
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton and self._tool is Tool.WIRE:
-            item = self.itemAt(event.pos())
-            self._wire_click(self.mapToScene(event.pos()), item)
+            position = event.position().toPoint()
+            item = self.itemAt(position)
+            self._wire_click(self.mapToScene(position), item)
             event.accept()
             return
         if event.button() == Qt.LeftButton and self._tool is Tool.SELECT:
-            item = self.itemAt(event.pos())
+            item = self.itemAt(event.position().toPoint())
             pin = self._pin_ref_for(item) if item is not None else None
             if pin is not None:
                 self._scene.clearSelection()
@@ -2384,16 +2385,16 @@ class Canvas(QGraphicsView):
 
     def mouseMoveEvent(self, event) -> None:
         if self._pin_drag is not None:
-            self._update_pin_drag(self.mapToScene(event.pos()))
+            self._update_pin_drag(self.mapToScene(event.position().toPoint()))
             event.accept()
             return
         if self._wire_points:
-            position = self._snap(self.mapToScene(event.pos()))
+            position = self._snap(self.mapToScene(event.position().toPoint()))
             self._update_preview(position)
         super().mouseMoveEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:
-        item_id = self._id_at(event.pos())
+        item_id = self._id_at(event.position().toPoint())
         if item_id is None:
             super().mouseDoubleClickEvent(event)
             return
@@ -2512,7 +2513,7 @@ class Canvas(QGraphicsView):
         if item_id is None:
             menu = QMenu(self)
             add_pin = menu.addAction("Добавить внешний пин")
-            action = menu.exec_(event.globalPos())
+            action = menu.exec(event.globalPos())
             if action is add_pin and self._undo_stack is not None:
                 point = self._snap(self.mapToScene(event.pos()))
                 frame = self._geometry_for(self._current).get(
@@ -2535,7 +2536,7 @@ class Canvas(QGraphicsView):
         delete = menu.addAction("Удалить")
         menu.addSeparator()
         copy = menu.addAction("Копировать")
-        action = menu.exec_(event.globalPos())
+        action = menu.exec(event.globalPos())
         if action is rename:
             self._rename_id(item_id)
         elif action is properties:
@@ -2648,7 +2649,7 @@ class Canvas(QGraphicsView):
         self.place_element(
             str(data.get("kind", "prim")),
             str(data.get("type", "")),
-            self.mapToScene(event.pos()),
+            self.mapToScene(event.position().toPoint()),
         )
         event.acceptProposedAction()
 
@@ -2948,7 +2949,7 @@ class Canvas(QGraphicsView):
         dialog = InstancePropertiesDialog(
             name, instance.kind, instance.type_name, self
         )
-        if dialog.exec_() != dialog.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         new_name, kind, type_name = dialog.values()
         if (new_name, kind, type_name) == (
@@ -3060,7 +3061,7 @@ class InstancePropertiesDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        from PyQt5.QtWidgets import (
+        from PySide6.QtWidgets import (
             QComboBox,
             QDialogButtonBox,
             QFormLayout,

@@ -1,8 +1,8 @@
 import unittest
 from types import SimpleNamespace
 
-from netlist.checker import model_utils
-from netlist.core.model import PinRef, SourceLoc
+from src.checker import model_utils
+from src.core.model import PinRef, SourceLoc
 from tests.core.fakes import (
     FakeBlock,
     FakeInstance,

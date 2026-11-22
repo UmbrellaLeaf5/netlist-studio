@@ -18,9 +18,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol, TypeVar, cast
 
-from netlist.core.diagnostics import InstanceKind, SourceLoc
-from netlist.core.errors import ModelError
-from netlist.core.views import (
+from src.core.diagnostics import InstanceKind, SourceLoc
+from src.core.errors import ModelError
+from src.core.views import (
     InstanceView,
     NetView,
     OrphanConnection,

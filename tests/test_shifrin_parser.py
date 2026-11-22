@@ -6,8 +6,8 @@ import weakref
 from types import SimpleNamespace as Row
 from unittest.mock import patch
 
-from netlist.checker import checker_parser as cp
-from netlist.core.model import PinRef, SourceLoc
+from src.checker import checker_parser as cp
+from src.core.model import PinRef, SourceLoc
 
 
 def raw():
@@ -66,7 +66,7 @@ class CheckerParserTest(unittest.TestCase):
         draft.primitives()[0].pin_names.append("extra")
         self.assertEqual(draft.find_primitive("D").pin_names, ["p"])
 
-    @patch("netlist.core.parser.NetlistParser", autospec=True)
+    @patch("src.core.parser.NetlistParser", autospec=True)
     def test_load_with_and_without_library(self, constructor):
         parser = constructor.return_value
         source = raw()

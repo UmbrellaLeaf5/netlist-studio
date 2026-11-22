@@ -16,9 +16,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from netlist.core.model import Diagnostic, Netlist, Severity, SourceLoc
-from netlist.core.parser import ParseResult, RawNetlist
-from netlist.editor import file_manager as fm
+from src.core.model import Diagnostic, Netlist, Severity, SourceLoc
+from src.core.parser import ParseResult, RawNetlist
+from src.editor import file_manager as fm
 
 
 NETLIST = "block main\nend\n"
@@ -172,7 +172,7 @@ class FileManagerTest(unittest.TestCase):
         self.assertFalse(self.manager.is_open)
         with self.assertRaises(AttributeError):
             self.manager.current_path = str(self.path)
-        self.path.write_text(NETLIST, encoding="ascii")
+        self.path.write_bytes(NETLIST.encode())
         self.manager.open(str(self.path))
         self.assertTrue(self.manager.is_open)
         self.assertTrue(self.marker().is_file())
@@ -310,7 +310,7 @@ class FileManagerTest(unittest.TestCase):
 
     def test_save_as_does_not_replace_another_managers_document(self):
         old = self.folder / "other.net"
-        old.write_text("occupied\n", encoding="ascii")
+        old.write_bytes(b"occupied\n")
         other_manager = fm.FileManager(self.parser, self.serializer)
         self.addCleanup(other_manager.close)
         other_manager.open(str(old))

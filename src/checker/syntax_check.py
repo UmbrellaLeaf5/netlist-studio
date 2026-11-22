@@ -10,9 +10,20 @@ import re
 from enum import Enum, auto
 from typing import Sequence
 
-from netlist.core.model import CheckOptions, Diagnostic, NetlistView, Severity, SourceLoc
+from src.core.model import CheckOptions, Diagnostic, NetlistView, Severity, SourceLoc
 
 NAME = "syntax"
+CODES: dict[str, str] = {
+    "E101": "нераспознанная строка",
+    "E102": "некорректный идентификатор",
+    "E103": "неверное число элементов строки",
+    "E104": "строка блока вне блока",
+    "E105": "вложенный или незакрытый блок",
+    "E106": "end без открытого блока",
+    "E107": "зарезервированное слово вместо идентификатора",
+    "E108": "недопустимый не-ASCII символ",
+    "E109": "primitive внутри блока",
+}
 KEYWORDS = frozenset({"block", "end", "pin", "net", "inst", "sub", "prim", "primitive"})
 ID_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 

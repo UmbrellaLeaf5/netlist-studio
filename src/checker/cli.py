@@ -1,11 +1,11 @@
 """CheckerCLI: консольный чекер нетлиста.
 
-Модуль чекера проекта «Нетлист»: `netlist/checker/cli.py`.
+Модуль чекера проекта «Нетлист»: `src/checker/cli.py`.
 Автор: М. Шифрин. Интерфейс согласовать с К. Трановичем (CheckerDialog,
 ProcessRunner), Н. Акрамовым (FileManager) и авторами проверок, см.
 interfaces.md, п. 4.9 и п. 6.3.
 
-Запуск: `python -m netlist.checker FILE [опции]` (список опций — в
+Запуск: `python -m src.checker FILE [опции]` (список опций — в
 build_arg_parser и в `--help`).
 
 Как работает `run`
@@ -37,7 +37,7 @@ import json
 import sys
 from typing import TYPE_CHECKING, TextIO
 
-from netlist.checker import (
+from src.checker import (
     checker_parser,
     cycle_check,
     hierarchy_check,
@@ -46,10 +46,10 @@ from netlist.checker import (
     subcircuit_check,
     syntax_check,
 )
-from netlist.checker.model_utils import ModelIndex
-from netlist.core.hierarchy import HierarchyWalker
-from netlist.core.model import CheckOptions, Diagnostic, Severity
-from netlist.editor import file_manager
+from src.checker.model_utils import ModelIndex
+from src.core.hierarchy import HierarchyWalker
+from src.core.model import CheckOptions, Diagnostic, Severity
+from src.editor import file_manager
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -66,7 +66,7 @@ CHECKS: dict[str, ModuleType] = {
 
 EXIT_OK, EXIT_ERRORS, EXIT_USAGE, EXIT_IO = 0, 1, 2, 3
 
-PROG = "python -m netlist.checker"
+PROG = "python -m src.checker"
 
 
 # Аргументы командной строки

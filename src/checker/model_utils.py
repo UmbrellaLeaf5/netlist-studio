@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Iterator
 from typing import TypeVar
 
-from netlist.core.model import (
+from src.core.model import (
     BlockView, InstanceView, NetlistView, NetView, PinRef, PinView,
     PrimitiveView, SourceLoc,
 )

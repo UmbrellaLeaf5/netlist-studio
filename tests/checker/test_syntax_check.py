@@ -1,8 +1,8 @@
 import unittest
 
-from netlist.checker import syntax_check
-from netlist.checker.syntax_check import LineKind, SyntaxCheck
-from netlist.core.model import Severity, SourceLoc
+from src.checker import syntax_check
+from src.checker.syntax_check import LineKind, SyntaxCheck
+from src.core.model import Severity, SourceLoc
 
 
 class SyntaxCheckTest(unittest.TestCase):

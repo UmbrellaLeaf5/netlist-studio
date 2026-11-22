@@ -1,6 +1,6 @@
 """SubcircuitCheck: соответствие инстансов определениям их типов.
 
-Модуль чекера проекта «Нетлист»: `netlist/checker/subcircuit_check.py`.
+Модуль чекера проекта «Нетлист»: `src/checker/subcircuit_check.py`.
 Автор: Л. Сальникова. Интерфейс согласовать с М. Шифриным (CheckerCLI)
 и Н. Чиркиным (ModelUtils), см. docs/interfaces.md, п. 4.6 и раздел 7.
 
@@ -51,17 +51,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from netlist.checker.model_utils import (
+from src.checker.model_utils import (
     ModelIndex,
     block_pin_names,
     resolve_type,
 )
-from netlist.core.model import CheckOptions, Diagnostic, Severity, SourceLoc
+from src.core.model import CheckOptions, Diagnostic, Severity, SourceLoc
 
 if TYPE_CHECKING:
     # Протоколы нужны только для аннотаций, поэтому во время выполнения
     # модуль от них не зависит.
-    from netlist.core.model import (
+    from src.core.model import (
         BlockView,
         InstanceView,
         NetlistView,
