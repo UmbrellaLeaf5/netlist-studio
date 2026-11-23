@@ -1,4 +1,14 @@
-"""Проверки черновика, принятия схемы и команд Canvas."""
+"""Тесты Canvas, EditorDraft и команд (src/editor/canvas.py, автор А. Пронин).
+
+Контракт: docs/interfaces.md, п. 3.4. Тесты проверяют загрузку черновика,
+локальные диагностики, принятие модели и восстановление геометрии.
+SyntaxCheck заменён заглушкой из tests/core/fakes.py. Команды вызываются
+на настоящем Canvas для проверки применения, отмены и восстановления
+из сериализованных данных.
+
+Запуск из корня репозитория:
+    python -m pytest tests/editor/test_canvas.py -v
+"""
 
 import json
 
@@ -50,6 +60,9 @@ def canvas(qtbot):
 
 
 def test_draft_keeps_orphan_connection_for_editor_diagnostics():
+    """Подключение к отсутствующему экземпляру остаётся в черновике, чтобы
+    редактор мог показать ошибку.
+    """
     draft = EditorDraft.from_raw(raw("block main\nnet n1\nu1.p1 n1\nend\n"))
 
     [orphan] = draft.block("main").orphan_connections()
@@ -61,6 +74,7 @@ def test_draft_keeps_orphan_connection_for_editor_diagnostics():
 
 
 def test_draft_edits_do_not_modify_source_model():
+    """Правка черновика не должна менять модель до принятия изменений."""
     model = Netlist()
     model.add_block("main").add_net("n1")
     draft = EditorDraft.from_model(model)
@@ -71,6 +85,9 @@ def test_draft_edits_do_not_modify_source_model():
 
 
 def test_new_document_replaces_draft_but_leaves_accepted_model(canvas):
+    """Создание нового черновика оставляет в нём только main и не меняет
+    принятую модель.
+    """
     widget, model, _ = canvas
     widget.load_draft(raw(SCHEME), None)
     model.add_block("accepted")
@@ -82,6 +99,9 @@ def test_new_document_replaces_draft_but_leaves_accepted_model(canvas):
 
 
 def test_load_opens_main_even_when_another_block_comes_first(canvas):
+    """При загрузке холст открывает main, даже если он записан после другого
+    блока. Панель блоков показывает тот же выбор.
+    """
     widget, _, blocks = canvas
 
     widget.load_draft(raw(SCHEME), None)
@@ -94,6 +114,9 @@ def test_load_opens_main_even_when_another_block_comes_first(canvas):
 def test_open_block_synchronizes_selection_and_clears_previous_selection(
     canvas, qtbot
 ):
+    """При переходе в другой блок панель выделяет его, а выбор объектов на
+    холсте сбрасывается.
+    """
     widget, _, blocks = canvas
     widget.load_draft(raw(SCHEME), None)
     widget.select([("main", "inst", "r1")])
@@ -108,6 +131,9 @@ def test_open_block_synchronizes_selection_and_clears_previous_selection(
 
 
 def test_schematic_restores_explicit_instance_position(canvas):
+    """Координаты и размер экземпляра берутся из схематика вместо
+    автоматической раскладки.
+    """
     widget, _, _ = canvas
     geometry = {
         "version": 1,
@@ -142,6 +168,9 @@ def test_schematic_restores_explicit_instance_position(canvas):
 def test_validate_reports_local_error_before_accepting_draft(
     canvas, body, code
 ):
+    """Каждый некорректный черновик даёт свой код ошибки. Проверка оставляет
+    принятую модель пустой.
+    """
     widget, model, _ = canvas
     widget.load_draft(raw(f"block main\n{body}\nend\n"), None)
 
@@ -153,6 +182,9 @@ def test_validate_reports_local_error_before_accepting_draft(
 
 
 def test_invalid_commit_keeps_last_accepted_model(canvas, qtbot):
+    """Если черновик содержит ошибку, холст сообщает об отказе и сохраняет
+    последнее принятое состояние.
+    """
     widget, model, _ = canvas
     model.add_block("main").add_net("accepted")
     widget.load_draft(raw("block main\npin p1 missing\nend\n"), None)
@@ -166,6 +198,9 @@ def test_invalid_commit_keeps_last_accepted_model(canvas, qtbot):
 
 
 def test_valid_commit_preserves_connections_in_accepted_model(canvas, qtbot):
+    """При принятии корректного черновика подключение экземпляра к цепи
+    переносится в модель.
+    """
     widget, model, _ = canvas
     widget.load_draft(raw(SCHEME), None)
 
@@ -177,6 +212,9 @@ def test_valid_commit_preserves_connections_in_accepted_model(canvas, qtbot):
 
 
 def test_warning_does_not_prevent_commit(qtbot):
+    """Предупреждение возвращается в списке диагностик и не мешает принять
+    черновик.
+    """
     warning = Diagnostic(
         "W604", Severity.WARNING, "editor", "test", SourceLoc(None, None)
     )
@@ -192,6 +230,9 @@ def test_warning_does_not_prevent_commit(qtbot):
 
 
 def test_reset_replaces_unaccepted_changes_with_model_state(canvas):
+    """Сброс убирает непринятые правки и возвращает в черновик содержимое
+    модели.
+    """
     widget, model, _ = canvas
     model.add_block("main").add_net("accepted")
     widget.load_draft(raw("block main\nnet pending\nend\n"), None)
@@ -206,6 +247,9 @@ def test_reset_replaces_unaccepted_changes_with_model_state(canvas):
 def test_add_instance_command_restores_position_after_undo_and_redo(
     canvas, qtbot
 ):
+    """Отмена убирает добавленный экземпляр. Повтор возвращает его на то же
+    место.
+    """
     widget, _, _ = canvas
     widget.load_draft(raw("primitive resistor p1 p2\nblock main\nend\n"), None)
     command = AddInstanceCommand("main", "r1", "prim", "resistor", (240, 160))
@@ -223,6 +267,9 @@ def test_add_instance_command_restores_position_after_undo_and_redo(
 
 
 def test_serialized_move_command_retains_both_positions(canvas):
+    """Команда, восстановленная из JSON, сохраняет обе позиции для отмены и
+    повторного применения.
+    """
     widget, _, _ = canvas
     widget.load_draft(raw(SCHEME), None)
     command = MoveInstanceCommand("main", "r1", (100, 100), (240, 160))
@@ -244,6 +291,7 @@ def test_serialized_move_command_retains_both_positions(canvas):
 
 
 def test_undo_remove_net_restores_connections_and_geometry(canvas):
+    """Отмена удаления цепи восстанавливает её геометрию и оба подключения."""
     widget, _, _ = canvas
     widget.load_draft(raw("block main\npin p1 -\npin p2 -\nend\n"), None)
     geometry = {"segments": [[20, 20, 80, 20]], "junctions": []}
@@ -266,6 +314,7 @@ def test_undo_remove_net_restores_connections_and_geometry(canvas):
     ids=["other-block", "other-instance"],
 )
 def test_moves_of_different_instances_are_not_merged(block, instance):
+    """Команды перемещения разных экземпляров или блоков нельзя объединять."""
     first = MoveInstanceCommand("main", "r1", (20, 20), (40, 40))
     second = MoveInstanceCommand(block, instance, (40, 40), (80, 80))
 
@@ -273,6 +322,9 @@ def test_moves_of_different_instances_are_not_merged(block, instance):
 
 
 def test_merged_move_undo_returns_to_start_of_drag(canvas):
+    """Отмена объединённого движения возвращает экземпляр в точку, откуда
+    начали перетаскивать.
+    """
     widget, _, _ = canvas
     widget.load_draft(raw(SCHEME), None)
     start = tuple(

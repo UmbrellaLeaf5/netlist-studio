@@ -1,4 +1,13 @@
-"""Проверки координации документа в главном окне Пронина."""
+"""Тесты EditorMainWindow (src/editor/main_window.py, автор А. Пронин).
+
+Контракт: docs/interfaces.md, п. 3.7. Тесты используют временные документы
+и настройки Qt. SyntaxCheck, проверка иерархии и Autosave заменены
+заглушками, чтобы проверить работу окна при открытии, сохранении
+и закрытии документа.
+
+Запуск из корня репозитория:
+    python -m pytest tests/editor/test_main_window.py -v
+"""
 
 import importlib.util
 from pathlib import Path
@@ -66,6 +75,9 @@ def window(qtbot, tmp_path, monkeypatch):
 
 
 def test_new_document_resets_editor_and_turns_autosave_off(window, tmp_path):
+    """Новый документ закрывает старый файл, сбрасывает историю и отключает
+    автосохранение.
+    """
     path = tmp_path / "old.net"
     path.write_text("block main\nend\nblock amp\nend\n", encoding="utf-8")
     assert window.open_document(str(path))
@@ -80,6 +92,9 @@ def test_new_document_resets_editor_and_turns_autosave_off(window, tmp_path):
 
 
 def test_open_document_selects_main_and_enables_autosave(window, tmp_path):
+    """Открытие документа выбирает main, включает автосохранение и добавляет
+    файл в список недавних.
+    """
     path = tmp_path / "amp.net"
     path.write_text("block main\nend\n", encoding="utf-8")
 
@@ -93,6 +108,9 @@ def test_open_document_selects_main_and_enables_autosave(window, tmp_path):
 def test_open_syntax_error_displays_diagnostic_without_accepting_file(
     window, tmp_path, monkeypatch
 ):
+    """При синтаксической ошибке окно показывает диагностику, оставляет файл
+    неоткрытым и не включает автосохранение.
+    """
     diagnostic = Diagnostic(
         "E101",
         Severity.ERROR,
@@ -118,6 +136,9 @@ def test_open_syntax_error_displays_diagnostic_without_accepting_file(
 def test_open_rejected_draft_releases_file_and_keeps_accepted_model(
     window, tmp_path
 ):
+    """Если черновик не принят, окно освобождает блокировку и сохраняет
+    последнее принятое состояние.
+    """
     path = tmp_path / "broken.net"
     path.write_text("block main\npin p1 missing\nend\n", encoding="utf-8")
     window.model.add_block("accepted")
@@ -131,6 +152,9 @@ def test_open_rejected_draft_releases_file_and_keeps_accepted_model(
 
 
 def test_save_as_writes_logical_and_geometric_document(window, tmp_path):
+    """При «Сохранить как» окно записывает нетлист, геометрию и историю,
+    затем включает автосохранение.
+    """
     path = tmp_path / "saved.net"
 
     assert window.save_document_as(str(path))
@@ -143,6 +167,9 @@ def test_save_as_writes_logical_and_geometric_document(window, tmp_path):
 
 
 def test_save_as_rejects_invalid_draft_before_creating_file(window, tmp_path):
+    """Некорректный черновик останавливает «Сохранить как» до записи файла.
+    Причина видна в диагностике.
+    """
     window.canvas.draft.block("main").add_pin("p1", "missing")
     path = tmp_path / "refused.net"
 
@@ -153,6 +180,9 @@ def test_save_as_rejects_invalid_draft_before_creating_file(window, tmp_path):
 
 
 def test_save_without_current_path_uses_save_as_dialog(window, monkeypatch):
+    """Если у документа нет пути, обычное сохранение открывает диалог
+    «Сохранить как» и учитывает его отмену.
+    """
     dialog = Mock(return_value=False)
     monkeypatch.setattr(window, "_save_document_as_dialog", dialog)
 
@@ -163,6 +193,9 @@ def test_save_without_current_path_uses_save_as_dialog(window, monkeypatch):
 def test_cancel_close_preserves_document_and_does_not_flush(
     window, tmp_path, monkeypatch
 ):
+    """При отмене закрытия документ остаётся открытым, а принудительное
+    автосохранение не запускается.
+    """
     path = tmp_path / "open.net"
     assert window.save_document_as(str(path))
     window.canvas.op_add_block("pending", 1)
@@ -177,6 +210,9 @@ def test_cancel_close_preserves_document_and_does_not_flush(
 
 
 def test_close_flushes_autosave_and_releases_file(window, tmp_path):
+    """При закрытии окно вызывает автосохранение и освобождает блокировку
+    документа.
+    """
     path = tmp_path / "open.net"
     assert window.save_document_as(str(path))
 
@@ -190,6 +226,9 @@ def test_close_flushes_autosave_and_releases_file(window, tmp_path):
 def test_rejected_open_does_not_replace_already_open_document(
     window, tmp_path, monkeypatch
 ):
+    """Синтаксическая ошибка в другом файле не закрывает текущий документ и
+    не отключает его автосохранение.
+    """
     old = tmp_path / "open.net"
     assert window.save_document_as(str(old))
     broken = tmp_path / "broken.net"
@@ -210,6 +249,9 @@ def test_rejected_open_does_not_replace_already_open_document(
 
 
 def test_diagnostics_panel_shows_error_and_warning_counts(window):
+    """Панель выводит обе диагностики и отдельно считает ошибки и
+    предупреждения.
+    """
     diagnostics = [
         Diagnostic(
             "E601", Severity.ERROR, "editor", "no net", SourceLoc(None, 1)
