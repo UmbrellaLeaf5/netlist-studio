@@ -95,6 +95,11 @@ docs/
   technical-requirements.pdf
   interfaces.md
   images/
+  tests_advices/
+tests/
+  core/               # тесты ядра
+  checker/            # тесты чекера
+  editor/             # тесты редактора
 ```
 
 Новые зависимости добавляются командой `uv add <пакет>`, удаляются через `uv remove <пакет>`: эти команды обновляют `pyproject.toml` и `uv.lock`.
