@@ -1,4 +1,4 @@
-"""NetCheck, § 4.8. Запуск: python -m unittest tests.test_shifrin_net"""
+"""NetCheck, § 4.8. Запуск: python -m unittest tests.checker.test_shifrin_net"""
 import copy
 import gc
 import unittest

@@ -37,7 +37,7 @@ class Event:
             slot(*args)
 
 
-class TestSignal:
+class SignalStub:
     def __init__(self, *_types):
         pass
 
@@ -90,7 +90,7 @@ def load_without_qt():
     qtcore = ModuleType("PySide6.QtCore")
     qt.QtCore = qtcore
     qtcore.QObject, qtcore.QTimer, qtcore.Signal = (
-        TimerOwner, ManualTimer, TestSignal,
+        TimerOwner, ManualTimer, SignalStub,
     )
     path = Path(file_manager.__file__).with_name("autosave.py")
     spec = spec_from_file_location("src.editor._autosave_unit_tests", path)

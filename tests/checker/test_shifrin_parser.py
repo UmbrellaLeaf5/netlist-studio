@@ -1,4 +1,4 @@
-"""CheckerParser, § 4.2. Запуск: python -m unittest tests.test_shifrin_parser"""
+"""CheckerParser, § 4.2. Запуск: python -m unittest tests.checker.test_shifrin_parser"""
 import copy
 import gc
 import unittest
