@@ -12,7 +12,9 @@ import json
 
 import pytest
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMenu
 
+from src.editor import block_list as block_list_module
 from src.editor.block_list import ELEMENT_MIME, BlockList
 
 
@@ -21,6 +23,33 @@ def blocks(qtbot):
     widget = BlockList()
     qtbot.addWidget(widget)
     return widget
+
+
+@pytest.mark.parametrize(
+    ("choice", "signal_name"),
+    [("Копировать…", "copyRequested"), ("Свойства…", "propertiesRequested")],
+    ids=["copy", "properties"],
+)
+def test_context_menu_action_targets_right_clicked_block(
+    blocks, qtbot, monkeypatch, choice, signal_name
+):
+    """Действие меню относится к блоку под курсором, даже если выбран другой."""
+    blocks.set_blocks(["main", "amp"])
+    blocks.select("main")
+    item = blocks.blocks.item(1)
+    position = blocks.blocks.visualItemRect(item).center()
+
+    class MenuWithSelection(QMenu):
+        def exec(self, _position):
+            return next(
+                action for action in self.actions() if action.text() == choice
+            )
+
+    monkeypatch.setattr(block_list_module, "QMenu", MenuWithSelection)
+    with qtbot.waitSignal(getattr(blocks, signal_name)) as request:
+        blocks.blocks.customContextMenuRequested.emit(position)
+
+    assert request.args == ["amp"]
 
 
 def test_set_blocks_preserves_document_order(blocks):

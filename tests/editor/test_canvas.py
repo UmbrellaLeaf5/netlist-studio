@@ -13,6 +13,9 @@ SyntaxCheck заменён заглушкой из tests/core/fakes.py. Кома
 import json
 
 import pytest
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtWidgets import QApplication
 
 from src.core.model import Diagnostic, Netlist, PinRef, Severity, SourceLoc
 from src.core.parser import NetlistParser
@@ -22,9 +25,12 @@ from src.editor.canvas import (
     AddNetCommand,
     Canvas,
     EditorDraft,
+    ExternalPinItem,
     MoveInstanceCommand,
     RemoveNetCommand,
+    Tool,
 )
+from src.editor.undo_stack import UndoStack
 from tests.core.fakes import make_syntax_module, replaced_modules
 
 SCHEME = """\
@@ -57,6 +63,92 @@ def canvas(qtbot):
     widget = Canvas(model, None, blocks, None, lambda draft: [])
     qtbot.addWidget(widget)
     return widget, model, blocks
+
+
+def test_wire_tool_connects_two_pins_and_supports_undo_and_redo(canvas, qtbot):
+    """Щелчки по двум пинам создают цепь, которую можно отменить и повторить."""
+    widget, _, _ = canvas
+    widget.set_undo_stack(UndoStack(widget))
+    widget.load_draft(
+        raw("block main\npin input -\npin output -\nend\n"),
+        {
+            "version": 1,
+            "blocks": {
+                "main": {
+                    "frame": [0, 0, 300, 240],
+                    "pins": {
+                        "input": {"side": "left", "offset": 80},
+                        "output": {"side": "right", "offset": 160},
+                    },
+                }
+            },
+        },
+    )
+    widget.resize(800, 600)
+    widget.show()
+    widget.centerOn(QPointF(150, 120))
+    widget.set_tool(Tool.WIRE)
+    items = {
+        item.pin_name: item
+        for item in widget.scene().items()
+        if isinstance(item, ExternalPinItem)
+    }
+    block = widget.draft.block("main")
+
+    for name in ("input", "output"):
+        position = widget.mapFromScene(items[name].sceneBoundingRect().center())
+        assert widget.viewport().rect().contains(position)
+        qtbot.mouseClick(widget.viewport(), Qt.LeftButton, pos=position)
+
+    [net] = block.nets()
+    assert [pin.net for pin in block.pins()] == [net.name, net.name]
+    route = widget.schematic()["blocks"]["main"]["nets"][net.name]
+    assert route["segments"]
+    assert all(x1 == x2 or y1 == y2 for x1, y1, x2, y2 in route["segments"])
+    widget.undo()
+    assert block.nets() == []
+    assert [pin.net for pin in block.pins()] == [None, None]
+    widget.redo()
+    assert [pin.net for pin in block.pins()] == [net.name, net.name]
+    assert widget.schematic()["blocks"]["main"]["nets"][net.name] == route
+
+
+@pytest.mark.filterwarnings(
+    "ignore:.*QDragEnterEvent.*is marked as deprecated:DeprecationWarning"
+)
+def test_drop_primitive_from_block_list_creates_instance_on_canvas(canvas):
+    """Перетаскивание примитива из списка создаёт экземпляр нужного типа."""
+    widget, _, blocks = canvas
+    widget.set_undo_stack(UndoStack(widget))
+    widget.load_draft(raw(SCHEME), None)
+    widget.resize(800, 600)
+    widget.show()
+    widget.centerOn(QPointF(300, 200))
+    position = widget.mapFromScene(QPointF(260, 180))
+    assert widget.viewport().rect().contains(position)
+    item = blocks.primitives.item(0)
+    mime = blocks.primitives.mimeData([item])
+    # Перегрузка с QPoint доступна и в минимальной версии Qt из проекта.
+    enter = QDragEnterEvent(
+        position, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier
+    )
+    drop = QDropEvent(
+        QPointF(position), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier
+    )
+
+    QApplication.sendEvent(widget.viewport(), enter)
+    assert enter.isAccepted()
+    QApplication.sendEvent(widget.viewport(), drop)
+
+    assert drop.isAccepted()
+    [instance] = [
+        inst
+        for inst in widget.draft.block("main").instances()
+        if inst.name != "r1"
+    ]
+    assert (instance.kind, instance.type_name) == ("prim", "resistor")
+    placed = widget.schematic()["blocks"]["main"]["instances"][instance.name]
+    assert placed["pos"] == [260, 180]
 
 
 def test_draft_keeps_orphan_connection_for_editor_diagnostics():
