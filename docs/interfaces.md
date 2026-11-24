@@ -17,14 +17,13 @@
 
 ## 0. Общие соглашения
 
-**Язык и версии.** Python 3.11+, аннотации типов обязательны в публичных функциях. GUI на Qt.
-Пока не выбрано между PySide6 и PyQt6, сигналы в документе записаны как `Signal(...)`
-(в PyQt6 это `pyqtSignal`). Тесты: `pytest` для логики, `pytest-qt` для интерфейса.
+**Язык и версии.** Python 3.11+, аннотации типов обязательны в публичных функциях. GUI редактора и оболочки на Qt 6 (PySide6).
+Сигналы объявляются через `Signal(...)`. Тесты: `pytest` для логики, `pytest-qt` для интерфейса.
 
 **Структура пакетов.** Разбиение на файлы соответствует архитектуре и ответственности модулей:
 
 ```
-netlist/
+src/
   core/      model.py  diagnostics.py  errors.py  views.py  entities.py
              netlist.py  parser.py  serializer.py  hierarchy.py                 # ядро редактора
   editor/    main_window.py  canvas.py  block_list.py  tool_palette.py
@@ -35,7 +34,7 @@ netlist/
   shell/     main_window.py  checker_dialog.py  settings.py  process_runner.py
 ```
 
-Запуск: `python -m netlist.shell`, `python -m netlist.editor`, `python -m netlist.checker`.
+Запуск: `python -m src.shell`, `python -m src.editor`, `python -m src.checker`.
 
 **Зависимости по коду (только стрелки финальной архитектуры):**
 
@@ -232,6 +231,11 @@ end
 Если `netlist_sha256` не совпадает с хэшем текущего `.net` (файл меняли вне редактора), история
 отбрасывается, а пользователь получает предупреждение.
 
+Новые файлы истории также содержат `schematic_sha256`: хэш соседнего `.sch.json`
+или `null`, если схематика при сохранении не было. Если поле есть и не совпадает
+с текущим состоянием, история отбрасывается. В старых файлах версии 1 это поле
+может отсутствовать. Для них достаточно совпадения хэша `.net`.
+
 ### 1.8. Файл блокировки `<имя>.net.lock`
 
 Создаёт FileManager. Содержит одну строку: `pid=<pid> host=<hostname> time=<ISO-8601>`.
@@ -240,7 +244,7 @@ end
 
 ## 2. Ядро редактора
 
-### 2.1. NetlistModel — `netlist/core/model.py`
+### 2.1. NetlistModel — `src/core/model.py`
 
 Автор: **Д. Криворучко**. Согласовано: Н. Бучилкин, А. Пронин, Н. Акрамов, а также
 М. Шифрин, Н. Чиркин, Л. Сальникова, М. Большаков (они пользуются `NetlistView`, `Diagnostic`,
@@ -250,7 +254,7 @@ end
 разделена по ответственности: `diagnostics.py` содержит общие типы сообщений и настроек,
 `views.py` — протоколы чтения, `entities.py` — блоки, экземпляры, пины, цепи и примитивы,
 `errors.py` — `ModelError`, а `netlist.py` — контейнер определений и принятие черновиков.
-Старые импорты из `netlist.core.model` сохраняются. Интерфейс, парсер и сериализатор в модели
+Публичные типы доступны из `src.core.model`. Интерфейс, парсер и сериализатор в модели
 не используются.
 
 #### Общие типы
@@ -337,11 +341,11 @@ class NetView(Protocol):
     loc: SourceLoc
 
 class InstanceView(Protocol):
-    name: str
-    kind: InstanceKind
-    type_name: str         # имя блока или примитива
-    loc: SourceLoc
-    def pins(self) -> list[PinView]        # пины, упомянутые в строках INST.PIN
+    name: str              # имя экземпляра внутри содержащего блока
+    kind: InstanceKind     # элемент enum: InstanceKind.SUB или InstanceKind.PRIM
+    type_name: str         # имя определения блока или примитива
+    loc: SourceLoc         # позиция объявления inst
+    def pins(self) -> list[PinView]  # пины экземпляра в порядке документа
 
 class OrphanConnection(Protocol):          # строка INST.PIN с необъявленным INST
     ref: PinRef
@@ -366,6 +370,11 @@ class NetlistView(Protocol):
 
 `find_block` и `find_primitive` возвращают первое вхождение имени. Дубликаты ищут проверки, для
 этого у ModelUtils есть индексы со списками.
+
+`InstanceView.kind` — элемент строкового перечисления `InstanceKind`: `InstanceKind.SUB`
+для подсхемы (значение `"sub"`) или `InstanceKind.PRIM` для примитива (значение `"prim"`).
+`pins()` возвращает пины самого экземпляра, а не список пинов его определения.
+В черновике порядок и повторы строк `INST.PIN` сохраняются.
 
 #### Классы принятой модели
 
@@ -440,9 +449,14 @@ class Instance:
 `connect_pin` с цепью, которая не объявлена в блоке, бросает `ModelError`.
 `Pin`, `Net`, `Primitive` — простые классы данных с полями из протоколов.
 
+Объекты одного класса принятой модели сравниваются по содержимому (`==`), включая
+`SourceLoc` и `Netlist.source_file`. Порядок определений, цепей, экземпляров и пинов
+учитывается. Сравнение не раскрывает подсхемы по `type_name` и не переходит от
+экземпляра к его содержащему блоку.
+
 ---
 
-### 2.2. NetlistParser — `netlist/core/parser.py`
+### 2.2. NetlistParser — `src/core/parser.py`
 
 Автор: **Н. Бучилкин**. Согласовано: Н. Акрамов (FileManager), М. Шифрин (CheckerParser),
 Н. Чиркин (SyntaxCheck).
@@ -510,7 +524,7 @@ class NetlistParser:
 
 ---
 
-### 2.3. NetlistSerializer — `netlist/core/serializer.py`
+### 2.3. NetlistSerializer — `src/core/serializer.py`
 
 Автор: **Н. Бучилкин**. Согласовано: Н. Акрамов (FileManager), Л. Сальникова (формат).
 
@@ -534,7 +548,7 @@ class NetlistSerializer:
 
 ---
 
-### 2.4. HierarchyWalker — `netlist/core/hierarchy.py`
+### 2.4. HierarchyWalker — `src/core/hierarchy.py`
 
 Автор: **Н. Бучилкин**. Согласовано: А. Пронин (редактор), Н. Чиркин (HierarchyCheck),
 М. Большаков (CycleCheck).
@@ -590,7 +604,7 @@ class HierarchyWalker:
 
 ## 3. Редактор
 
-### 3.1. FileManager — `netlist/editor/file_manager.py`
+### 3.1. FileManager — `src/editor/file_manager.py`
 
 Автор: **Н. Акрамов**. Согласовано: А. Пронин (EditorMainWindow, Canvas), М. Шифрин (CheckerCLI).
 
@@ -647,6 +661,7 @@ class FileManager:
     def new(self) -> None
     def open(self, path: str, force_unlock: bool = False) -> OpenResult
     def save(self, model: Netlist, schematic: dict, path: str | None = None) -> SaveResult
+    def transaction(self) -> ContextManager[None]
     def close(self) -> None
     def check_lock(self, path: str) -> LockInfo | None
 ```
@@ -654,8 +669,8 @@ class FileManager:
 - `new()` закрывает текущий файл (`close()`) и начинает документ без пути (`current_path = None`).
 - `open(path, force_unlock)`:
   1. захватывает блокировку: атомарно создаёт файл `lock_path(path)` (`O_CREAT|O_EXCL`) и
-     открывает `.net` с блокировкой ОС (`fcntl.lockf` в Linux, `msvcrt.locking` в Windows),
-     чтобы другие программы не открыли его на запись;
+     открывает `.net` с платформенной защитой
+     (`fcntl.flock` в Linux, `CreateFileW` в Windows);
   2. читает текст и вызывает `parser.parse`;
   3. читает схематик, если он есть. Повреждённый JSON даёт `schematic = None` и предупреждение
      W701 в `parse.diagnostics`.
@@ -668,12 +683,32 @@ class FileManager:
   Если передан `path`, это «сохранить как»: новый файл блокируется, старая блокировка снимается,
   `current_path` меняется. Для нового документа `path` обязателен, иначе `ValueError`. Возвращает
   `SaveResult` с хэшем `.net`, он нужен UndoStack для привязки истории.
+- `transaction()` требует открытого документа. Контекст сохраняет прежние
+  `.net`, `.sch.json` и `.history.json` в журнале. При успехе журнал удаляется.
+  При исключении файлы восстанавливаются, а исключение передаётся вызывающему
+  коду. Оставшийся после аварии журнал применяется при следующем открытии
+  после захвата блокировки. Повреждённый журнал приводит к `FileAccessError`.
 - `close()` снимает блокировку и удаляет lock-файл. Можно вызывать повторно.
 - `check_lock(path)` — кто держит блокировку файла, или `None`.
 
+**Платформенные особенности.** В Windows доступ к маркеру координирует
+именованный mutex. Дескриптор данных открывается с `FILE_SHARE_READ`:
+стороннее открытие на запись отклоняется, пока этот дескриптор удерживается.
+При атомарной замене файла дескриптор переоткрывается, а маркер владения
+остаётся захваченным. В Linux для координации маркера используется пустой файл
+`<имя>.net.lock.guard` с `flock`. Он остаётся после закрытия документа,
+чтобы ожидающие процессы продолжали блокировать один и тот же файл.
+Владельца документа показывает только `.net.lock`.
+
+В Linux блокировка данных рекомендательная. Она останавливает попытку
+взять несовместимую блокировку, а программы, которые её игнорируют, могут
+писать в файл. Для блокировки выбран `flock`, поскольку чтение и закрытие
+другого дескриптора в том же процессе не снимают эту блокировку.
+
+
 ---
 
-### 3.2. UndoStack — `netlist/editor/undo_stack.py`
+### 3.2. UndoStack — `src/editor/undo_stack.py`
 
 Автор: **Н. Акрамов**. Согласовано: А. Пронин (Canvas, EditorMainWindow).
 
@@ -717,6 +752,8 @@ class UndoStack:
     def redo_text(self) -> str | None
     def begin_macro(self, text: str) -> None
     def end_macro(self) -> None
+    def abort_macro(self) -> None
+    def macro(self, text: str) -> ContextManager[None]
     def clear(self) -> None
     index: int; count: int                        # только чтение
     def add_listener(self, fn: Callable[[], None]) -> None
@@ -729,6 +766,9 @@ class UndoStack:
 - `undo()` и `redo()` возвращают `False`, если делать нечего.
 - `begin_macro` и `end_macro` объединяют несколько команд в одну составную, которая отменяется
   целиком. Пример — «Копировать блок».
+- `abort_macro()` отменяет команды открытой группы. Без открытой группы
+  выбрасывает `RuntimeError`. Контекст `macro(text)` закрывает группу при
+  успехе и откатывает её при исключении, передавая исключение вызывающему коду.
 - `clear()` очищает историю. Вызывается при создании нового документа: история идёт «до момента
   создания файла».
 - `add_listener(fn)` — `fn()` вызывается после любого изменения стека. Так ToolPalette
@@ -741,7 +781,7 @@ class UndoStack:
 
 ---
 
-### 3.3. Autosave — `netlist/editor/autosave.py`
+### 3.3. Autosave — `src/editor/autosave.py`
 
 Автор: **Н. Акрамов**. Согласовано: А. Пронин (EditorMainWindow).
 
@@ -775,12 +815,16 @@ class Autosave(QObject):
 - `mark_dirty()` вызывается, когда принятая модель изменилась (после `Canvas.commit`).
 - По таймеру, а также при вызове `flush()`, если состояние «грязное», выполняется
   `file_manager.save(state.model, state.schematic)` и затем `state.undo_stack.save(history_path, sha)`.
-  После успеха испускается `saved`, после ошибки — `failed`, а флаг «грязно» остаётся.
+  Обе записи выполняются внутри `file_manager.transaction()`. После успеха
+  испускается `saved`, после ошибки — `failed`, а флаг «грязно» остаётся.
+  При `OSError` таймер продолжает работу. При остальных исключениях таймер
+  останавливается. Повторный вызов `flush()` из обработчика сигнала возвращает
+  `False` до завершения текущего сохранения.
   `flush()` возвращает признак успеха и вызывается при закрытии окна.
 
 ---
 
-### 3.4. Canvas — `netlist/editor/canvas.py`
+### 3.4. Canvas — `src/editor/canvas.py`
 
 Автор: **А. Пронин**. Согласовано: Н. Акрамов (UndoStack, Autosave), Д. Криворучко (NetlistModel),
 Н. Бучилкин (RawNetlist, HierarchyWalker).
@@ -921,7 +965,7 @@ class Canvas(QGraphicsView):
 
 ---
 
-### 3.5. BlockList — `netlist/editor/block_list.py`
+### 3.5. BlockList — `src/editor/block_list.py`
 
 Автор: **А. Пронин**. Согласовано: внутри редактора (Canvas, EditorMainWindow).
 
@@ -953,7 +997,7 @@ BlockList черновик не меняет: он только испускае
 
 ---
 
-### 3.6. ToolPalette — `netlist/editor/tool_palette.py`
+### 3.6. ToolPalette — `src/editor/tool_palette.py`
 
 Автор: **А. Пронин**. Согласовано: внутри редактора.
 
@@ -981,7 +1025,7 @@ Canvas подписан на `undoRequested`, `redoRequested` и `toolChanged`. 
 
 ---
 
-### 3.7. EditorMainWindow — `netlist/editor/main_window.py`
+### 3.7. EditorMainWindow — `src/editor/main_window.py`
 
 Автор: **А. Пронин**. Согласовано: К. Транович (запуск из оболочки), Н. Акрамов.
 
@@ -1003,7 +1047,7 @@ class EditorMainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None
 ```
 
-- `main(argv)` — точка входа `python -m netlist.editor [FILE]`. Если `FILE` передан, сразу
+- `main(argv)` — точка входа `python -m src.editor [FILE]`. Если `FILE` передан, сразу
   вызывается `open_document`. Возвращает код выхода Qt-приложения.
 - `new_document()` вызывает `fm.new()`, `canvas.new_document()`, `undo_stack.clear()`,
   `autosave.disable()`.
@@ -1050,7 +1094,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(), **kw) -> list[
 
 ---
 
-### 4.1. ModelUtils — `netlist/checker/model_utils.py`
+### 4.1. ModelUtils — `src/checker/model_utils.py`
 
 Автор: **Н. Чиркин**. Согласовано: М. Шифрин, Л. Сальникова, М. Большаков.
 
@@ -1108,7 +1152,7 @@ class ModelIndex:
 
 ---
 
-### 4.2. CheckerParser — `netlist/checker/checker_parser.py`
+### 4.2. CheckerParser — `src/checker/checker_parser.py`
 
 Автор: **М. Шифрин**. Согласовано: Н. Бучилкин (NetlistParser), М. Шифрин (CheckerCLI).
 
@@ -1136,7 +1180,7 @@ def load(text: str, filename: str | None = None,
 
 ---
 
-### 4.3. SyntaxCheck — `netlist/checker/syntax_check.py`
+### 4.3. SyntaxCheck — `src/checker/syntax_check.py`
 
 Автор: **Н. Чиркин**. Согласовано: Н. Бучилкин (NetlistParser), М. Шифрин (CheckerCLI), Л. Сальникова (формат).
 
@@ -1172,7 +1216,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(), **kw) -> list[
 
 ---
 
-### 4.4. HierarchyCheck — `netlist/checker/hierarchy_check.py`
+### 4.4. HierarchyCheck — `src/checker/hierarchy_check.py`
 
 Автор: **Н. Чиркин**. Согласовано: М. Шифрин, Н. Бучилкин (HierarchyWalker).
 
@@ -1188,7 +1232,7 @@ E204 (нет `opts.top`), E205 (дубликат примитива), W206 (бл
 `walker.missing()` и `walker.reachable(opts.top)`. Если `walker` не передан, создаёт
 `HierarchyWalker(view)`, импортируя его внутри функции.
 
-### 4.5. CycleCheck — `netlist/checker/cycle_check.py`
+### 4.5. CycleCheck — `src/checker/cycle_check.py`
 
 Автор: **М. Большаков**. Согласовано: М. Шифрин, Н. Бучилкин (HierarchyWalker).
 
@@ -1203,7 +1247,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
 на строку `inst`, которая замыкает цикл. Цикл через несуществующий блок невозможен:
 такие рёбра в граф walker'а не попадают.
 
-### 4.6. SubcircuitCheck — `netlist/checker/subcircuit_check.py`
+### 4.6. SubcircuitCheck — `src/checker/subcircuit_check.py`
 
 Автор: **Л. Сальникова**. Согласовано: М. Шифрин (CheckerCLI), Н. Чиркин (ModelUtils).
 
@@ -1229,7 +1273,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
 O(суммарного числа пинов инстансов) при множествах имён пинов, которые строятся один раз на
 каждое определение.
 
-### 4.7. PinCheck — `netlist/checker/pin_check.py`
+### 4.7. PinCheck — `src/checker/pin_check.py`
 
 Автор: **Л. Сальникова**. Согласовано: М. Шифрин, Н. Чиркин.
 
@@ -1248,7 +1292,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
   инстансе этот пин явно `-`. Выдаётся на строке инстанса: внутренняя цепь
   блока в этом экземпляре висит в воздухе.
 
-### 4.8. NetCheck — `netlist/checker/net_check.py`
+### 4.8. NetCheck — `src/checker/net_check.py`
 
 Автор: **М. Шифрин**. Согласовано: Н. Чиркин (ModelUtils).
 
@@ -1269,7 +1313,7 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
   по определениям за один проход по рёбрам иерархии, без раскрытия. В отчёте указывается
   блок, цепь и путь экземпляра.
 
-### 4.9. CheckerCLI — `netlist/checker/cli.py`
+### 4.9. CheckerCLI — `src/checker/cli.py`
 
 Автор: **М. Шифрин**. Согласовано: К. Транович (CheckerDialog, ProcessRunner), Н. Акрамов
 (FileManager), все авторы проверок.
@@ -1306,7 +1350,7 @@ def main(argv: list[str] | None = None) -> int     # sys.exit(main())
 
 ## 5. Оболочка
 
-### 5.1. Settings — `netlist/shell/settings.py`
+### 5.1. Settings — `src/shell/settings.py`
 
 Автор: **К. Транович**. Согласовано: К. Транович (CheckerDialog, ProcessRunner).
 
@@ -1339,11 +1383,11 @@ class Settings:
 ```
 
 - `editor_command()` и `checker_command()` возвращают префикс команды запуска. По умолчанию
-  `[sys.executable, "-m", "netlist.editor"]` и `[sys.executable, "-m", "netlist.checker"]`.
+  `[sys.executable, "-m", "src.editor"]` и `[sys.executable, "-m", "src.checker"]`.
   Их можно переопределить ключами `paths/editor` и `paths/checker`, например для собранного exe.
 - Конструктор принимает `QSettings`, чтобы в тестах подставлять временный ini-файл.
 
-### 5.2. ProcessRunner — `netlist/shell/process_runner.py`
+### 5.2. ProcessRunner — `src/shell/process_runner.py`
 
 Автор: **К. Транович**. Согласовано: К. Транович, А. Пронин (аргументы редактора), М. Шифрин (аргументы чекера).
 
@@ -1373,7 +1417,7 @@ class ProcessRunner(QObject):
   и stderr. Вывод построчно испускается в `checkerOutput`. Пока чекер работает, повторный
   запуск возвращает `False`.
 
-### 5.3. CheckerDialog — `netlist/shell/checker_dialog.py`
+### 5.3. CheckerDialog — `src/shell/checker_dialog.py`
 
 Автор: **К. Транович**. Согласовано: М. Шифрин (параметры CLI).
 
@@ -1402,7 +1446,7 @@ def build_args(state: CheckerDialogState) -> list[str]
   сохраняются между запусками оболочки.
 - `show_exit_code` показывает итог: 0 — «ошибок нет», 1 — «найдены ошибки», 2 и 3 — «ошибка запуска».
 
-### 5.4. MainWindow — `netlist/shell/main_window.py`
+### 5.4. MainWindow — `src/shell/main_window.py`
 
 Автор: **К. Транович**. Согласовано: —.
 
@@ -1486,7 +1530,7 @@ class MainWindow(QMainWindow):
 ### 6.3. CLI чекера
 
 ```
-python -m netlist.checker FILE [опции]
+python -m src.checker FILE [опции]
 
   FILE                        входной файл нетлиста
   -c, --checks LIST           список проверок через запятую:
@@ -1565,7 +1609,7 @@ design.net:41: warning W604 [net] цепь 'n9' блока 'block1' подклю
 
 ## 8. Сквозной сценарий в вызовах интерфейсов
 
-1. **Оболочка → редактор.** `MainWindow` → `ProcessRunner.run_editor()` → процесс `python -m netlist.editor`.
+1. **Оболочка → редактор.** `MainWindow` → `ProcessRunner.run_editor()` → процесс `python -m src.editor`.
 2. **Загрузка.** `EditorMainWindow.open_document(p)` → `FileManager.open(p)` → `NetlistParser.parse`
    → `SyntaxCheck.check_lines` → `Canvas.load_draft(raw, sch)` → `Canvas.commit()` →
    `validator` = `HierarchyWalker(draft).validate()` → `HierarchyCheck.check` + `CycleCheck.check`

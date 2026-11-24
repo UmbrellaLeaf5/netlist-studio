@@ -1,4 +1,4 @@
-"""Юнит-тесты HierarchyWalker (netlist/core/hierarchy.py, автор Н. Бучилкин).
+"""Юнит-тесты HierarchyWalker (src/core/hierarchy.py, автор Н. Бучилкин).
 
 Контракт: docs/interfaces.md, п. 2.4. Вместо настоящего нетлиста
 используется FakeView из fakes.py. Иерархия задаётся короткой записью
@@ -20,8 +20,8 @@ import dataclasses
 import types
 import unittest
 
-from netlist.core.hierarchy import HierarchyCycleError, HierarchyWalker, HierEdge
-from netlist.core.model import CheckOptions, Diagnostic, Severity
+from src.core.hierarchy import HierarchyCycleError, HierarchyWalker, HierEdge
+from src.core.model import CheckOptions, Diagnostic, Severity
 from tests.core.fakes import FakeBlock, FakeInstance, FakeView, hierarchy, loc
 from tests.core.fakes import replaced_modules
 
@@ -461,8 +461,8 @@ class ValidateTest(unittest.TestCase):
         self.cycle_check = _recording_check_module("fake_cycle_check",
                                                    [self.c_diag])
         patcher = replaced_modules({
-            "netlist.checker.hierarchy_check": self.hierarchy_check,
-            "netlist.checker.cycle_check": self.cycle_check,
+            "src.checker.hierarchy_check": self.hierarchy_check,
+            "src.checker.cycle_check": self.cycle_check,
         })
         patcher.__enter__()
         self.addCleanup(patcher.__exit__, None, None, None)

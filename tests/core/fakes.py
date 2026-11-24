@@ -4,13 +4,13 @@
 проверяли только тестируемый модуль и опирались на контракт из
 docs/interfaces.md, а не на текущее состояние чужого кода:
 
-* `make_syntax_module()` — модуль `netlist.checker.syntax_check` по
+* `make_syntax_module()` — модуль `src.checker.syntax_check` по
   контракту п. 4.2: LineKind, tokenize, classify и класс SyntaxCheck.
   Лексика упрощена до минимума, нужного парсеру.
 * `StubSyntaxCheck` — объект с `check_lines`, который возвращает заранее
   заданные диагностики и запоминает, с какими аргументами его вызвали.
 * `replaced_modules(...)` — временно подставляет модули в `sys.modules`
-  (и в атрибуты пакета), чтобы `from netlist.checker import X` внутри
+  (и в атрибуты пакета), чтобы `from src.checker import X` внутри
   тестируемого кода получил заглушку.
 * `FakeView` и компания — минимальная реализация протокола NetlistView
   (раздел 2.1) для HierarchyWalker и NetlistSerializer.
@@ -27,7 +27,7 @@ from enum import Enum
 from typing import Iterator, Sequence
 from unittest import mock
 
-from netlist.core.model import Diagnostic, Severity, SourceLoc
+from src.core.model import Diagnostic, Severity, SourceLoc
 
 
 # Подмена модулей
@@ -35,7 +35,7 @@ from netlist.core.model import Diagnostic, Severity, SourceLoc
 def replaced_modules(modules: dict[str, types.ModuleType]) -> Iterator[None]:
     """Подставить модули по полным именам на время блока `with`.
 
-    Пример: replaced_modules({"netlist.checker.syntax_check": fake}).
+    Пример: replaced_modules({"src.checker.syntax_check": fake}).
     После выхода всё возвращается как было, даже если тест упал.
     """
     with ExitStack() as stack:

@@ -1,7 +1,7 @@
-"""Юнит-тесты NetlistParser (netlist/core/parser.py, автор Н. Бучилкин).
+"""Юнит-тесты NetlistParser (src/core/parser.py, автор Н. Бучилкин).
 
 Контракт: docs/interfaces.md, п. 2.2. Модуль нижнего уровня SyntaxCheck
-(`netlist.checker.syntax_check`) целиком заменён заглушкой из fakes.py:
+(`src.checker.syntax_check`) целиком заменён заглушкой из fakes.py:
 лексика (tokenize/classify/LineKind) сделана по контракту п. 4.2, а
 `check_lines` возвращает заданные тестом диагностики. Поэтому тесты
 проверяют только сам парсер: какие записи он строит и какие строки
@@ -21,8 +21,8 @@ import copy
 import unittest
 from contextlib import ExitStack
 
-from netlist.core.model import Severity, SourceLoc
-from netlist.core.parser import (
+from src.core.model import Severity, SourceLoc
+from src.core.parser import (
     NetlistParser,
     ParseResult,
     RawBlock,
@@ -60,7 +60,7 @@ class ParserTestCase(unittest.TestCase):
         self.syntax = make_syntax_module()
         stack = ExitStack()
         stack.enter_context(
-            replaced_modules({"netlist.checker.syntax_check": self.syntax}))
+            replaced_modules({"src.checker.syntax_check": self.syntax}))
         self.addCleanup(stack.close)
 
     def parse(self, source: str, diagnostics=(), filename: str | None = FILE
