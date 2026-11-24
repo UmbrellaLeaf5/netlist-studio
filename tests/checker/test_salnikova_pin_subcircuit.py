@@ -1,8 +1,10 @@
-"""Юнит-тесты PinCheck и SubcircuitCheck.
+"""Юнит-тесты PinCheck и SubcircuitCheck, docs/interfaces.md, п. 4.6–4.7.
+
+Автор тестов: К. Транович. Проверяемые модули: Л. Сальникова.
 
 Запуск из корня репозитория:
-    python3 test_pin_subcircuit.py              (краткий отчёт)
-    python3 -m unittest test_pin_subcircuit -v  (подробно)
+    python3 -m tests.checker.test_salnikova_pin_subcircuit      (краткий отчёт)
+    python3 -m unittest tests.checker.test_salnikova_pin_subcircuit -v
 
 Проверяются настоящие модули src/checker/pin_check.py и
 src/checker/subcircuit_check.py. Нетлист собирается из заглушек
