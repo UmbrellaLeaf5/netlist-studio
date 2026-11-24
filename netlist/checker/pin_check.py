@@ -18,7 +18,10 @@
 * E502 (ошибка): пин инстанса явно не подключён (`t1.p1 -`).
 * E503 (ошибка): пин упомянут больше одного раза: повтор `pin NAME`
   в блоке или повтор `INST.PIN` у одного инстанса. В сообщении обе
-  строки, а сама ошибка стоит на повторной строке.
+  строки, а сама ошибка стоит на повторной строке. Сюда же относится
+  повтор имени пина в строке `primitive P a a` (в файле или в
+  библиотеке `--primitives`): ошибка стоит на строке `primitive`,
+  поле `block` пустое, потому что примитив объявлен вне блоков.
 * W504 (предупреждение): в определении блока-подсхемы внешний пин
   подключён к цепи, а в данном инстансе этот пин явно `-`. Значит,
   внутренняя цепь блока в этом экземпляре «висит в воздухе». Выдаётся
@@ -57,6 +60,7 @@ if TYPE_CHECKING:
         InstanceView,
         NetlistView,
         PinView,
+        PrimitiveView,
     )
 
 
@@ -89,11 +93,17 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
         _kw:   прочие именованные аргументы контракта (`walker=`)
                принимаются и игнорируются.
 
-    Возвращает диагностики: блоки в порядке файла, внутри блока по
-    номеру строки. Исключений из-за содержимого нетлиста не бросает.
+    Возвращает диагностики: сначала E503 по объявлениям примитивов (в
+    порядке view.primitives(): файл, затем библиотека), потом блоки в
+    порядке файла, внутри блока по номеру строки. Исключений из-за
+    содержимого нетлиста не бросает.
     """
     definitions = _DefinitionNets(view)
     result: list[Diagnostic] = []
+    for prim in view.primitives():
+        result.extend(_check_primitive_pins(prim))
+    if _limit_reached(result, opts.max_errors):
+        return _cut_after_errors(result, opts.max_errors)
     for block in view.blocks():
         diags = _check_block_pins(block)
         for inst in block.instances():
@@ -102,6 +112,26 @@ def check(view: NetlistView, opts: CheckOptions = CheckOptions(),
         if _limit_reached(result, opts.max_errors):
             return _cut_after_errors(result, opts.max_errors)
     return result
+
+
+# Пины в объявлении примитива (E503)
+def _check_primitive_pins(prim: PrimitiveView) -> list[Diagnostic]:
+    """E503: имя пина повторяется в строке `primitive`.
+
+    Обе «ноги» стоят на одной строке, поэтому в сообщении указан
+    номер повтора по порядку, а не вторая строка.
+    """
+    seen: set[str] = set()
+    diags: list[Diagnostic] = []
+    for name in prim.pin_names:
+        if name in seen:
+            diags.append(_diag(
+                "E503", Severity.ERROR,
+                f"пин '{name}' примитива '{prim.name}' указан в "
+                f"объявлении больше одного раза",
+                prim.loc, "", f"{prim.name}.{name}"))
+        seen.add(name)
+    return diags
 
 
 # Внешние пины блока (E501, E503)
@@ -185,6 +215,13 @@ class _DefinitionNets:
     экземпляров одного блока не разбирали его определение заново.
     Для каждого пина берётся ПЕРВОЕ упоминание в определении, по тому же
     правилу, что и в _check_block_pins.
+
+    Ключ только имя типа, без вида: в кэш попадают лишь инстансы `sub`
+    (для остальных get возвращает None раньше), поэтому блок и примитив
+    с одинаковым именем не путаются. Повторные определения блока с тем
+    же именем являются ошибкой E203 (HierarchyCheck), а resolve_type
+    всегда берёт первое из них, так что кэш по имени отдаёт ровно то,
+    что вернул бы resolve_type для любого инстанса этого типа.
     """
 
     def __init__(self, view: NetlistView) -> None:
@@ -252,12 +289,21 @@ def _limit_reached(diags: list[Diagnostic], limit: int | None) -> bool:
 
 def _cut_after_errors(diags: list[Diagnostic],
                       limit: int | None) -> list[Diagnostic]:
-    """Обрезать список сразу после `limit`-й ошибки (opts.max_errors)."""
+    """Обрезать список после `limit`-й ошибки (opts.max_errors).
+
+    Предупреждения, стоящие сразу за ней на той же строке (W504 к
+    E502), остаются: они уточняют уже выведенную ошибку, а не являются
+    новыми. Порядок «ошибка, затем её уточнение» обеспечивает
+    устойчивая сортировка _sorted_by_line.
+    """
     if limit is None:
         return diags
     errors = 0
     for i, diag in enumerate(diags):
         if errors >= limit:
+            if (i > 0 and diag.severity is Severity.WARNING
+                    and diag.loc == diags[i - 1].loc):
+                continue
             return diags[:i]
         if diag.severity is Severity.ERROR:
             errors += 1

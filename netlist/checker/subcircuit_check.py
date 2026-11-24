@@ -271,8 +271,9 @@ class _DefinitionPins:
             names = block_pin_names(definition)
         else:
             names = list(definition.pin_names)
-        # dict.fromkeys убирает повторы (повтор пина в определении
-        # является ошибкой самого определения) и сохраняет порядок.
+        # dict.fromkeys убирает повторы и сохраняет порядок. Повтор
+        # пина в определении является ошибкой самого определения:
+        # E503 в PinCheck (и для `pin`, и для строки `primitive`).
         return dict.fromkeys(names)
 
 
@@ -316,12 +317,21 @@ def _limit_reached(diags: list[Diagnostic], limit: int | None) -> bool:
 
 def _cut_after_errors(diags: list[Diagnostic],
                       limit: int | None) -> list[Diagnostic]:
-    """Обрезать список сразу после `limit`-й ошибки (opts.max_errors)."""
+    """Обрезать список после `limit`-й ошибки (opts.max_errors).
+
+    Предупреждения, стоящие сразу за ней на той же строке, остаются:
+    они уточняют уже выведенную ошибку. У этой проверки предупреждений
+    нет, но функция держится одинаковой с копией в pin_check.py, где
+    так сохраняется W504 после E502.
+    """
     if limit is None:
         return diags
     errors = 0
     for i, diag in enumerate(diags):
         if errors >= limit:
+            if (i > 0 and diag.severity is Severity.WARNING
+                    and diag.loc == diags[i - 1].loc):
+                continue
             return diags[:i]
         if diag.severity is Severity.ERROR:
             errors += 1
