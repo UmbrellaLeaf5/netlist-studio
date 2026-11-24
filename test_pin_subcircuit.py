@@ -4,32 +4,23 @@
     python3 test_pin_subcircuit.py              (краткий отчёт)
     python3 -m unittest test_pin_subcircuit -v  (подробно)
 
-Проверяются настоящие модули netlist/checker/pin_check.py и
-netlist/checker/subcircuit_check.py. Нетлист собирается из заглушек
+Проверяются настоящие модули src/checker/pin_check.py и
+src/checker/subcircuit_check.py. Нетлист собирается из заглушек
 tests/core/fakes.py (минимальная реализация протокола NetlistView,
-docs/interfaces.md, п. 2.1), как в остальных тестах. Типы Severity,
-CheckOptions, PinRef и SourceLoc берутся настоящие.
-
-ModelUtils (Н. Чиркин) заменён заглушкой по контракту п. 4.1:
-resolve_type, block_pin_names и ModelIndex(view) с полями blocks и
-primitives. Текущая версия netlist/checker/model_utils.py этому
-контракту не соответствует (нет block_pin_names, ModelIndex() без
-аргумента, resolve_type не смотрит на sub/prim), и с ней
-subcircuit_check даже не импортируется. Заглушка подставляется в
-sys.modules только на время импорта двух проверяемых модулей, поэтому
-другие тесты получают настоящий model_utils.
+docs/interfaces.md, п. 2.1), как в остальных тестах чекера. Типы
+Severity, CheckOptions, PinRef и ModelIndex берутся настоящие.
 """
 
 from __future__ import annotations
 
-import importlib
 import sys
-import types
 import unittest
 from dataclasses import dataclass, field
-from unittest import mock
 
-from netlist.core.model import CheckOptions, PinRef, Severity, SourceLoc
+from src.checker import pin_check as PIN
+from src.checker import subcircuit_check as SUB
+from src.checker.model_utils import ModelIndex
+from src.core.model import CheckOptions, PinRef, Severity, SourceLoc
 from tests.core.fakes import (
     FakeBlock,
     FakeInstance,
@@ -38,52 +29,6 @@ from tests.core.fakes import (
     FakeView,
     loc,
 )
-
-
-# Заглушка ModelUtils по контракту docs/interfaces.md, п. 4.1
-def resolve_type(view, inst):
-    """Первое определение в пространстве имён своего вида (sub/prim)."""
-    if inst.kind == "sub":
-        return view.find_block(inst.type_name)
-    if inst.kind == "prim":
-        return view.find_primitive(inst.type_name)
-    return None
-
-
-def block_pin_names(block):
-    return [p.name for p in block.pins()]
-
-
-class ModelIndex:
-    """Индексы имён: blocks и primitives, имя -> список определений."""
-
-    def __init__(self, view):
-        self.blocks: dict[str, list] = {}
-        self.primitives: dict[str, list] = {}
-        for b in view.blocks():
-            self.blocks.setdefault(b.name, []).append(b)
-        for p in view.primitives():
-            self.primitives.setdefault(p.name, []).append(p)
-
-
-def _import_checks():
-    """Импортировать проверки с заглушкой ModelUtils и убрать её после."""
-    stub = types.ModuleType("netlist.checker.model_utils")
-    stub.resolve_type = resolve_type
-    stub.block_pin_names = block_pin_names
-    stub.ModelIndex = ModelIndex
-    names = ("netlist.checker.pin_check", "netlist.checker.subcircuit_check")
-    with mock.patch.dict(sys.modules,
-                         {"netlist.checker.model_utils": stub}):
-        for name in names:
-            sys.modules.pop(name, None)
-        modules = [importlib.import_module(name) for name in names]
-    for name in names:          # не оставлять модули, связанные с заглушкой
-        sys.modules.pop(name, None)
-    return modules
-
-
-PIN, SUB = _import_checks()
 
 
 @dataclass
